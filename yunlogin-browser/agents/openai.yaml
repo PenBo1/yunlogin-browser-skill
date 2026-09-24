@@ -1,0 +1,10 @@
+interface:
+  display_name: "YunLogin Browser"
+  short_description: "Manage YunLogin environments, accounts, and proxies by API"
+  icon_small: "./assets/icon-48.png"
+  icon_large: "./assets/icon-512.png"
+  brand_color: "#3F83DE"
+  default_prompt: "Use $yunlogin-browser to choose the correct local or server API surface, inspect the endpoint contract, and complete the requested YunLogin operation safely."
+
+policy:
+  allow_implicit_invocation: true

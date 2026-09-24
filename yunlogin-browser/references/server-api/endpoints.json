@@ -1,0 +1,1186 @@
+{
+  "surface": "server",
+  "default_origin": "https://d126447d359e70c0.yunlogin.com",
+  "tested_at": "2026-09-24",
+  "auth": {
+    "header": "Authorization",
+    "scheme": "Bearer",
+    "token_env": "YUNLOGIN_SERVER_TOKEN",
+    "cookie_env": "YUNLOGIN_SERVER_COOKIE",
+    "lang_env": "YUNLOGIN_SERVER_LANG"
+  },
+  "endpoints": [
+    {
+      "id": "browser-list",
+      "method": "POST",
+      "path": "/v2/newbrowser/getconditionshops",
+      "document": "endpoints/browser-list.md",
+      "body_defaults": {
+        "groupid": "",
+        "shopname": "",
+        "serial": 0,
+        "sortorder": 12,
+        "remark": "",
+        "label": "",
+        "authoritiesUserid": [],
+        "labelids": [],
+        "companyid": "",
+        "userid": "",
+        "enable": 1,
+        "offer": 0,
+        "number": 100,
+        "browserid": [],
+        "self": false,
+        "transfers": false,
+        "share": false,
+        "authorities": false,
+        "open_by_others": false,
+        "create_by_others": false
+      },
+      "body_required": [
+        "companyid",
+        "userid"
+      ],
+      "redact_keys": [
+        "cdk"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "browser-settings",
+      "method": "POST",
+      "path": "/v2/newbrowser/getsettings",
+      "document": "endpoints/browser-settings.md",
+      "body_defaults": {},
+      "body_required": [],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "browser-cookie",
+      "method": "POST",
+      "path": "/v2/newbrowser/getCookie",
+      "document": "endpoints/browser-cookie.md",
+      "body_defaults": {
+        "shopid": ""
+      },
+      "body_required": [
+        "shopid"
+      ],
+      "redact_keys": [
+        "data"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "proxy-cloud-list",
+      "method": "GET",
+      "path": "/v2/proxy/device/vcnplist",
+      "document": "endpoints/proxy-cloud-list.md",
+      "query_defaults": {
+        "page": 1,
+        "per_page": 20,
+        "device_name": "",
+        "publicip": "",
+        "status": 0,
+        "userid": "",
+        "companyid": ""
+      },
+      "query_required": [
+        "page",
+        "per_page",
+        "status",
+        "userid",
+        "companyid"
+      ],
+      "redact_keys": [
+        "proxyp",
+        "proxyu"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "proxy-self-list",
+      "method": "GET",
+      "path": "/v2/proxy/device/findDeviceProxyUserSelves",
+      "document": "endpoints/proxy-self-list.md",
+      "query_defaults": {
+        "status": 1,
+        "trademark": "self",
+        "page": 1,
+        "per_page": 20,
+        "company": "",
+        "companyid": "",
+        "userid": "",
+        "proxy_type": "",
+        "ip_type": "",
+        "detect_result": "",
+        "name": "",
+        "ip": "",
+        "serial": 0
+      },
+      "query_required": [
+        "status",
+        "trademark",
+        "page",
+        "per_page",
+        "companyid",
+        "userid"
+      ],
+      "redact_keys": [
+        "proxyp",
+        "proxyu"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "proxy-dynamic-list",
+      "method": "GET",
+      "path": "/v2/proxy/device/findDeviceDynamicProxies",
+      "document": "endpoints/proxy-dynamic-list.md",
+      "query_defaults": {
+        "status": 0,
+        "trademark": "general",
+        "page": 1,
+        "per_page": 20,
+        "userid": "",
+        "companyid": "",
+        "ip_type": "",
+        "inspect": "",
+        "serial": "",
+        "name": ""
+      },
+      "query_required": [
+        "status",
+        "trademark",
+        "page",
+        "per_page",
+        "userid",
+        "companyid"
+      ],
+      "redact_keys": [
+        "url"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "account-list",
+      "method": "POST",
+      "path": "/v2/newbrowser/getUserPasswordList",
+      "document": "endpoints/account-list.md",
+      "body_defaults": {
+        "name": "",
+        "user_name": "",
+        "remark": "",
+        "platform_name": "",
+        "page": 1,
+        "pageSize": 100,
+        "platformLock": -1,
+        "bind": -1
+      },
+      "body_required": [],
+      "redact_keys": [
+        "password",
+        "tfa",
+        "user_name"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "find-devices",
+      "method": "POST",
+      "path": "/v2/proxy/device/findDevices",
+      "document": "endpoints/find-devices.md",
+      "body_defaults": {
+        "device_ids": [],
+        "trademark": "official"
+      },
+      "body_required": [
+        "device_ids",
+        "trademark"
+      ],
+      "redact_keys": [
+        "proxyp",
+        "proxyu"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "fingerprint-uri",
+      "method": "POST",
+      "path": "/v2/newbrowser/getfingerprinturi",
+      "document": "endpoints/fingerprint-uri.md",
+      "body_defaults": {
+        "shopid": ""
+      },
+      "body_required": [
+        "shopid"
+      ],
+      "redact_keys": [
+        "cookie",
+        "password",
+        "tfa",
+        "passwd",
+        "proxyu",
+        "proxyp"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "environment-create",
+      "method": "POST",
+      "path": "/v2/newbrowser/putalluri",
+      "document": "endpoints/environment-create.md",
+      "body_defaults": {
+        "number": 1,
+        "randProxy": 0,
+        "batch_platform_id": "",
+        "batch_custom_id": "",
+        "batchProxy": [],
+        "browser": {}
+      },
+      "body_required": [
+        "browser"
+      ],
+      "redact_keys": [
+        "passwd",
+        "password",
+        "proxyu",
+        "proxyp",
+        "cookie",
+        "user",
+        "tfa"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      },
+      "mutation": true
+    },
+    {
+      "id": "user-notices",
+      "method": "POST",
+      "path": "/v2/message/user-notice/my",
+      "document": "endpoints/user-notices.md",
+      "body_defaults": {
+        "noticeType": 0,
+        "page": 1,
+        "pageSize": 10
+      },
+      "body_required": [],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "environment-clone",
+      "method": "POST",
+      "path": "/v2/newbrowser/batchCloneShop",
+      "document": "endpoints/environment-clone.md",
+      "body_defaults": {
+        "number": 1,
+        "accountIds": []
+      },
+      "body_required": [],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      },
+      "mutation": true
+    },
+    {
+      "id": "rpa-plan-list",
+      "method": "POST",
+      "path": "/v2/rpa/getRpaPlanManagementList",
+      "document": "endpoints/rpa-plan-list.md",
+      "body_defaults": {
+        "userId": "",
+        "executeType": 11,
+        "accountIds": []
+      },
+      "body_required": [
+        "userId",
+        "accountIds"
+      ],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "latest-open-environments",
+      "method": "POST",
+      "path": "/v2/newbrowser/getLatestOpenAccountIdList",
+      "document": "endpoints/latest-open-environments.md",
+      "body_defaults": {
+        "num": 20
+      },
+      "body_required": [],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "fingerprint-defaults",
+      "method": "POST",
+      "path": "/v2/newbrowser/getdefaultfingerlist",
+      "document": "endpoints/fingerprint-defaults.md",
+      "body_defaults": {
+        "system": "",
+        "kernel": "",
+        "kernelVersion": ""
+      },
+      "body_required": [
+        "system",
+        "kernel",
+        "kernelVersion"
+      ],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "platform-class-tree",
+      "method": "POST",
+      "path": "/v2/newbrowser/getalluri",
+      "document": "endpoints/platform-class-tree.md",
+      "body_defaults": {},
+      "body_required": [],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "platform-catalog",
+      "method": "GET",
+      "path": "/v2/newbrowser/getallurilist",
+      "document": "endpoints/platform-catalog.md",
+      "query_defaults": {},
+      "query_required": [],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "custom-platform-list",
+      "method": "POST",
+      "path": "/v2/newbrowser/getalluserselfuri",
+      "document": "endpoints/custom-platform-list.md",
+      "body_defaults": {
+        "company": "",
+        "companyid": "",
+        "userid": ""
+      },
+      "body_required": [
+        "companyid",
+        "userid"
+      ],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "plugin-list",
+      "method": "GET",
+      "path": "/v2/plugin/getAddedAndGlobalplugin",
+      "document": "endpoints/plugin-list.md",
+      "query_defaults": {},
+      "query_required": [],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "auth-shop-brief-list",
+      "method": "POST",
+      "path": "/v2/newbrowser/getauthshopbriefinfolist",
+      "document": "endpoints/auth-shop-brief-list.md",
+      "body_defaults": {
+        "page": 1,
+        "pageSize": 10,
+        "name": "",
+        "groupid": ""
+      },
+      "body_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie",
+        "data"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "bound-account-detail",
+      "method": "POST",
+      "path": "/v2/newbrowser/getBindUserPassword",
+      "document": "endpoints/bound-account-detail.md",
+      "body_defaults": {
+        "user_password_id": "",
+        "pageSize": 10086
+      },
+      "body_required": [
+        "user_password_id"
+      ],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie",
+        "data"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "account-users-get",
+      "method": "POST",
+      "path": "/v2/newbrowser/account-users/get",
+      "document": "endpoints/account-users-get.md",
+      "body_defaults": {
+        "accountIds": []
+      },
+      "body_required": [
+        "accountIds"
+      ],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "server-group-list",
+      "method": "POST",
+      "path": "/v2/newbrowser/getgroups",
+      "document": "endpoints/server-group-list.md",
+      "body_defaults": {
+        "company": "",
+        "companyid": "",
+        "userid": "",
+        "name": ""
+      },
+      "body_required": [
+        "companyid",
+        "userid"
+      ],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie",
+        "data"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "proxy-tag-list",
+      "method": "GET",
+      "path": "/v2/proxy/device/findTags",
+      "document": "endpoints/proxy-tag-list.md",
+      "query_defaults": {
+        "company": "",
+        "companyid": "",
+        "keyword": "",
+        "page": 1,
+        "per_page": 10000
+      },
+      "query_required": [
+        "companyid"
+      ],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "proxy-tag-upsert",
+      "method": "POST",
+      "path": "/v2/proxy/device/updateTag",
+      "document": "endpoints/proxy-tag-upsert.md",
+      "body_defaults": {
+        "company": "",
+        "companyid": "",
+        "color": 8,
+        "label": "",
+        "labelid": ""
+      },
+      "body_required": [
+        "companyid",
+        "label"
+      ],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      },
+      "mutation": true
+    },
+    {
+      "id": "proxy-tag-delete",
+      "method": "POST",
+      "path": "/v2/proxy/device/delTag",
+      "document": "endpoints/proxy-tag-delete.md",
+      "body_defaults": {
+        "company": "",
+        "companyid": "",
+        "labelid": []
+      },
+      "body_required": [
+        "companyid",
+        "labelid"
+      ],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      },
+      "mutation": true
+    },
+    {
+      "id": "server-group-create",
+      "method": "POST",
+      "path": "/v2/newbrowser/putnewgroup",
+      "document": "endpoints/server-group-create.md",
+      "body_defaults": {
+        "company": "",
+        "companyid": "",
+        "userid": "",
+        "group": "",
+        "groupid": ""
+      },
+      "body_required": [
+        "companyid",
+        "userid",
+        "group"
+      ],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      },
+      "mutation": true
+    },
+    {
+      "id": "server-group-delete",
+      "method": "POST",
+      "path": "/v2/newbrowser/deletegroups",
+      "document": "endpoints/server-group-delete.md",
+      "body_defaults": {
+        "groupid": []
+      },
+      "body_required": [
+        "groupid"
+      ],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      },
+      "mutation": true
+    },
+    {
+      "id": "environment-delete",
+      "method": "POST",
+      "path": "/v2/newbrowser/putdeleteshop",
+      "document": "endpoints/environment-delete.md",
+      "body_defaults": {
+        "company": "",
+        "companyid": "",
+        "userid": "",
+        "shopid": []
+      },
+      "body_required": [
+        "companyid",
+        "userid",
+        "shopid"
+      ],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      },
+      "mutation": true
+    },
+    {
+      "id": "proxy-device-logs",
+      "method": "GET",
+      "path": "/v2/proxy/device/findDeviceLogs",
+      "document": "endpoints/proxy-device-logs.md",
+      "query_defaults": {
+        "page": "1",
+        "per_page": "20",
+        "name": "",
+        "ip": "",
+        "to_company_id": ""
+      },
+      "query_required": [
+        "page",
+        "per_page"
+      ],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "transfer-shop-list",
+      "method": "POST",
+      "path": "/v2/newbrowser/transferShopList",
+      "document": "endpoints/transfer-shop-list.md",
+      "body_defaults": {
+        "page": 1,
+        "pageSize": 20,
+        "name": "",
+        "ip": "",
+        "companyid": ""
+      },
+      "body_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie",
+        "data"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "auth-log-permissions",
+      "method": "POST",
+      "path": "/v2/logs/auth/perms",
+      "document": "endpoints/auth-log-permissions.md",
+      "body_defaults": {
+        "pageIndex": 1,
+        "total": 0,
+        "pageSize": 20
+      },
+      "body_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "auth-log-options",
+      "method": "POST",
+      "path": "/v2/logs/auth/options",
+      "document": "endpoints/auth-log-options.md",
+      "body_defaults": {
+        "pageIndex": 1,
+        "total": 0,
+        "pageSize": 20
+      },
+      "body_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "team-login-logs",
+      "method": "POST",
+      "path": "/v2/team/loginlogs",
+      "document": "endpoints/team-login-logs.md",
+      "body_defaults": {
+        "pageIndex": 1,
+        "total": 0,
+        "pageSize": 20
+      },
+      "body_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "current-company-info",
+      "method": "GET",
+      "path": "/v2/team/curCompanyInfo",
+      "document": "endpoints/current-company-info.md",
+      "query_defaults": {},
+      "query_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie"
+      ],
+      "tested": {
+        "http_status": 404,
+        "code": null
+      }
+    },
+    {
+      "id": "user-meal-settings",
+      "method": "GET",
+      "path": "/v2/cost/costmanagement/get_user_set_meal",
+      "document": "endpoints/user-meal-settings.md",
+      "query_defaults": {},
+      "query_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "team-members",
+      "method": "POST",
+      "path": "/v2/team/getMembers",
+      "document": "endpoints/team-members.md",
+      "body_defaults": {
+        "pageSize": 5,
+        "pageIndex": 1,
+        "deptId": "",
+        "true_name": "",
+        "leave": 3,
+        "name": "",
+        "username": "",
+        "contact": ""
+      },
+      "body_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "team-roles",
+      "method": "POST",
+      "path": "/v2/team/roles",
+      "document": "endpoints/team-roles.md",
+      "body_defaults": {
+        "pageIndex": 1,
+        "pageSize": 999
+      },
+      "body_required": [],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "team-departments",
+      "method": "POST",
+      "path": "/v2/team/getDepts",
+      "document": "endpoints/team-departments.md",
+      "body_defaults": {},
+      "body_required": [],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "team-invite-code",
+      "method": "POST",
+      "path": "/v2/team/invite/getCode",
+      "document": "endpoints/team-invite-code.md",
+      "body_defaults": {
+        "reset": 0
+      },
+      "body_required": [],
+      "redact_keys": [
+        "data"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      },
+      "mutation": "conditional"
+    },
+    {
+      "id": "version-core",
+      "method": "POST",
+      "path": "/v2/team/version/getCore",
+      "document": "endpoints/version-core.md",
+      "body_defaults": {
+        "appVersion": "",
+        "versionCode": 0,
+        "bitness": "64",
+        "platform": "windows",
+        "browser": "chrome",
+        "deviceId": "",
+        "mac": "",
+        "computerName": "",
+        "channel": "",
+        "appId": "yunlogin"
+      },
+      "body_required": [],
+      "redact_keys": [
+        "mac",
+        "deviceId"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "team-authentication-get",
+      "method": "POST",
+      "path": "/v2/team/authentication/get",
+      "document": "endpoints/team-authentication-get.md",
+      "body_defaults": {},
+      "body_required": [],
+      "redact_keys": [],
+      "tested": {
+        "http_status": 404,
+        "code": null
+      }
+    },
+    {
+      "id": "my-companies",
+      "method": "POST",
+      "path": "/v2/team/myCompanies",
+      "document": "endpoints/my-companies.md",
+      "body_defaults": {},
+      "body_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "sms-settings",
+      "method": "POST",
+      "path": "/v2/message/sms-setting/get",
+      "document": "endpoints/sms-settings.md",
+      "body_defaults": {},
+      "body_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "member-profile",
+      "method": "POST",
+      "path": "/v2/team/member/myInfo",
+      "document": "endpoints/member-profile.md",
+      "body_defaults": {},
+      "body_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie",
+        "data"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "company-user-devices",
+      "method": "GET",
+      "path": "/v2/team/company/user/devices",
+      "document": "endpoints/company-user-devices.md",
+      "query_defaults": {},
+      "query_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie"
+      ],
+      "tested": {
+        "http_status": 404,
+        "code": null
+      }
+    },
+    {
+      "id": "settings-contact",
+      "method": "GET",
+      "path": "/v2/news/settings/info",
+      "document": "endpoints/settings-contact.md",
+      "query_defaults": {
+        "key": "setting.contact"
+      },
+      "query_required": [
+        "key"
+      ],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie",
+        "data"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "settings-qrcode",
+      "method": "GET",
+      "path": "/v2/news/settings/info",
+      "document": "endpoints/settings-qrcode.md",
+      "query_defaults": {
+        "key": "setting.qrcode"
+      },
+      "query_required": [
+        "key"
+      ],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie",
+        "data"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "company-face-check",
+      "method": "GET",
+      "path": "/v2/team/authentication/companyFourElementsFaceCheck",
+      "document": "endpoints/company-face-check.md",
+      "query_defaults": {},
+      "query_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie",
+        "data"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "role-department-meal",
+      "method": "POST",
+      "path": "/v2/team/company/getRoleDepartmentMeal",
+      "document": "endpoints/role-department-meal.md",
+      "body_defaults": {},
+      "body_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "authentication-check",
+      "method": "GET",
+      "path": "/v2/team/authentication/check",
+      "document": "endpoints/authentication-check.md",
+      "query_defaults": {},
+      "query_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "my-user-info",
+      "method": "POST",
+      "path": "/v2/sso/auth/myUserinfo",
+      "document": "endpoints/my-user-info.md",
+      "body_defaults": {},
+      "body_required": [],
+      "redact_keys": [
+        "password",
+        "passwd",
+        "tfa",
+        "user_name",
+        "proxyu",
+        "proxyp",
+        "cookie",
+        "data"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    }
+  ],
+  "business_success_codes": [
+    200
+  ]
+}

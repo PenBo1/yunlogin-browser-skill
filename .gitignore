@@ -1,0 +1,15 @@
+# Build artifact produced by the packaging step
+yunlogin-browser.zip
+*.zip
+
+# Playwright CLI session artifacts
+.playwright-cli/
+.playwright/
+
+# Node tooling leftovers; the skill scripts are dependency-free
+node_modules/
+package-lock.json
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
