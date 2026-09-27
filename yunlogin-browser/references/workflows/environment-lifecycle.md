@@ -127,7 +127,27 @@ An environment template carries three presentation attributes:
 | Group | `browser.categoryid` | group ID from `putnewgroup` or `getgroups` |
 | Tags | `browser.labelid` | tag IDs from `findTags` |
 
-Ask the user before applying any of them. The helper refuses to send them until `--confirm-attributes` is passed:
+Ask the user first. Create is the step where a bare environment is easiest to
+produce by accident, so `create` with no attribute flag stops before it sends
+anything, exits with code 2, and prints the real choices:
+
+```text
+$ node scripts/yunlogin-env.mjs create --name demo
+{
+  "command": "create",
+  "needsAttributes": true,
+  "name": "demo",
+  "availableGroups": ["<group name>", "<group name>"],
+  "availableTags": ["<tag name>", "<tag name>"],
+  "message": "Ask the user which group, remark, and tags to apply, then re-run with --group, --notes, and --label plus --confirm-attributes. Pass --accept-defaults to create in the default group with no remark and no tags."
+}
+```
+
+Ask with those names, then re-run with the answer. `--accept-defaults` is the
+only way to create in the default group with nothing else attached, and it means
+the user chose that on purpose.
+
+After the attributes are chosen, the helper still refuses to send them until `--confirm-attributes` is passed:
 
 ```text
 $ node scripts/yunlogin-env.mjs create --name demo --group Sales --label prod --notes "handover"
@@ -142,6 +162,23 @@ $ node scripts/yunlogin-env.mjs create --name demo --group Sales --label prod --
 Pass `--create-missing` to create a group or tag that does not exist yet. Without it, an unknown group or tag is an error so a typo cannot silently create new data.
 
 The group list returns the group ID as `gropid`, and group creation returns the same value as `categoryid`. Tags carry their ID as `labelid`.
+
+### Where Each Transport Puts The Attributes
+
+The two create routes do not use the same fields:
+
+| Attribute | Server route `putalluri` | Local route `user/create` |
+| --- | --- | --- |
+| Remark | `browser.notes` | `browser[].notes` |
+| Group | `browser.categoryid` | `browser[].accounts.groupid` |
+| Tags | `browser.labelid` | No field. Tags cannot be set through this route. |
+
+The local route accepts a top-level `groupid` without complaining and then stores
+the environment in the default group, so the helper sends the group inside
+`accounts` instead. When a create falls back to the local route and tags were
+requested, the result carries `skippedAttributes` naming the tags and the reason,
+and `appliedAttributes` leaves the tags out rather than reporting them as done.
+Create with `--transport server` when tags matter.
 
 ## Deletion Requires Confirmation
 

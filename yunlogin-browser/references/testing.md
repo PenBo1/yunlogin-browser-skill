@@ -17,9 +17,10 @@ non-zero when any check fails.
 | frontmatter | `SKILL.md` keeps a valid `name` and `description`. |
 | behaviour | Each helper CLI runs and keeps its guards: dry-run works, unknown endpoint ids are refused, and mutations still require their confirmation flags. |
 | token-refresh wiring | The catalog resolves the refresh route, and a server read refreshes the session first when the remaining lifetime is inside the skew window. |
+| attribute question | `create` with no attribute flag exits 2 with `needsAttributes`, offers the real group names, and creates nothing. |
 | `--live` | The loopback API, the port 52446 client service, the cached server session, one cataloged server read, and the proactive refresh path answer correctly. |
 
-Result on 2026-09-27: 16 offline checks and 5 live checks passed.
+Result on 2026-09-27: 17 offline checks and 6 live checks passed.
 
 ## Local API
 
@@ -114,6 +115,12 @@ map.
 | `POST /v2/newbrowser/putalluri` with `browser.shopid` set | `code: 200`; the same `shopid` came back, no duplicate row appeared, and the changed `notes` read back. |
 | `POST /v2/newbrowser/putalluri` with `browseinfo` sent unchanged | `code: 500` unmarshal errors on `user_password_ids` and `fingerprint.enableCookie`; nothing was written. |
 | `putalluri` with an official proxy block and `browser.shopid` set | `code: 200`; the read-back showed `device_type: official`, `ipChannel: ipinfo`, the supplied `proxyId`, and `proxyDel: 0`. |
+| `create` with no attribute flag | Exit code 2 with `needsAttributes` plus the real group and tag names; nothing was created. |
+| `create --group --notes --label --confirm-attributes` on the server route | Group, tag, and remark all read back correctly. |
+| `create --accept-defaults` | Created in the default group with no remark and no tags; `appliedAttributes` was null. |
+| `create --transport local --group <name>` | Landed in the requested group once the helper sent `browser[].accounts.groupid`. |
+| The same create with a top-level `browser[].groupid` | Accepted with `code: 0` and ignored; the environment landed in the default group. |
+| `create --transport local --label <name>` | The local route has no tag field, so the result reported `skippedAttributes` for the tag and `appliedAttributes` omitted it. |
 | Temporary environments used for these checks | Deleted; a follow-up `getconditionshops` returned zero matches. |
 
 ## CDP and Playwright CLI

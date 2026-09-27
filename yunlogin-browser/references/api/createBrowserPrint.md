@@ -283,3 +283,15 @@ Failure
   }
 }
 ```
+## Verified Field Placement
+
+Tested live on 2026-09-27 against the local route.
+
+| Field | Where it belongs | Observed behaviour |
+| --- | --- | --- |
+| `notes` | `browser[].notes` | Stored and shown in the environment list. |
+| `groupid` | `browser[].accounts.groupid` | The environment is created in that group. |
+| `groupid` | `browser[].groupid` (top level) | Accepted with `code: 0` and then ignored, so the environment lands in the default group. |
+| `labelid` | Not supported | Accepted with `code: 0` and ignored; the environment is created with no tags. |
+
+Use the server route `POST /v2/newbrowser/putalluri` when a create has to carry tags.

@@ -104,6 +104,7 @@ Options:
   --group NAME                Group to place the environment in.
   --create-missing            Create the group or tag when it does not exist.
   --confirm-attributes        Confirm that notes, tags, and the group may be applied.
+  --accept-defaults           Skip the attribute question and create in the default group with no remark or tags.
   --transport MODE            auto, server, or local (default: auto).
   --account-id ID             Environment ID for delete, clean-env, or bootstrap-token.
   --group-id ID               Group ID for group-delete or group-create rename.
@@ -157,7 +158,7 @@ function parseArguments(argv) {
   const options = {
     transport: "auto", number: 1, color: undefined, labels: [],
     keepEnvironment: false, dryRun: false, confirmDelete: false, confirmAttributes: false,
-    confirmClean: false, createMissing: false, confirmCreate: false, reuseOnly: false,
+    confirmClean: false, createMissing: false, confirmCreate: false, reuseOnly: false, acceptDefaults: false,
   };
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -172,6 +173,7 @@ function parseArguments(argv) {
     else if (argument === "--group") { options.group = takeValue(args, index, argument); index += 1; }
     else if (argument === "--create-missing") { options.createMissing = true; }
     else if (argument === "--confirm-attributes") { options.confirmAttributes = true; }
+    else if (argument === "--accept-defaults") { options.acceptDefaults = true; }
     else if (argument === "--transport") { options.transport = takeValue(args, index, argument); index += 1; }
     else if (argument === "--account-id") { options.accountId = takeValue(args, index, argument); index += 1; }
     else if (argument === "--group-id") { options.groupId = takeValue(args, index, argument); index += 1; }
@@ -711,11 +713,20 @@ export async function createEnvironment(options = {}) {
     if (transport === "server") throw new Error(`Server create failed: ${attempts.at(-1).error}`);
   }
   const attributes = options.attributes ?? {};
+  // The local route reads the group from accounts.groupid. A top-level groupid
+  // is accepted but ignored, which silently drops the environment into the
+  // default group. The local route exposes no tag field at all.
+  const skippedAttributes = attributes.labelIds?.length
+    ? {
+        labels: attributes.labelNames ?? attributes.labelIds,
+        reason: "The local create route has no tag field, so the tags were not applied. Use the server transport to set tags.",
+      }
+    : undefined;
   const body = {
     browser: Array.from({ length: options.number ?? 1 }, () => ({
       name,
       notes: attributes.notes ?? "",
-      ...(attributes.groupId ? { groupid: attributes.groupId } : {}),
+      ...(attributes.groupId ? { accounts: { groupid: attributes.groupId } } : {}),
       proxy: { type: "local" },
       finger: buildLocalFingerBlock({
         system: options.system ?? DEFAULT_SYSTEM,
@@ -724,14 +735,14 @@ export async function createEnvironment(options = {}) {
       }),
     })),
   };
-  if (options.dryRun) return { dryRun: true, transport: "local", path: LOCAL_CREATE_PATH, name, body, serverAttempts: attempts };
+  if (options.dryRun) return { dryRun: true, transport: "local", path: LOCAL_CREATE_PATH, name, body, skippedAttributes, serverAttempts: attempts };
   const response = await localRequest(LOCAL_CREATE_PATH, { method: "POST", body });
   if (!response.ok || response.payload?.code !== 0) {
     throw new Error(`Local create failed: HTTP ${response.status}, code=${response.payload?.code}, msg=${response.payload?.msg ?? ""}${attempts.length ? ` (server attempt: ${attempts[0].error})` : ""}`);
   }
   const environment = await waitForEnvironment(name, options);
   if (!environment) throw new Error("Local create succeeded but the environment was not listed before the deadline");
-  return { transport: "local", path: LOCAL_CREATE_PATH, name, environment, serverAttempts: attempts };
+  return { transport: "local", path: LOCAL_CREATE_PATH, name, environment, skippedAttributes, serverAttempts: attempts };
 }
 
 export async function deleteEnvironment(accountId, options = {}) {
@@ -918,6 +929,29 @@ async function main() {
 
   if (command === "create") {
     const wantsAttributes = options.notes !== undefined || options.labels.length > 0 || options.group !== undefined;
+    if (!wantsAttributes && !options.acceptDefaults && !options.dryRun) {
+      // Ask the user before creating a bare environment, and list the real
+      // group and tag names so the question is concrete instead of a guess.
+      let availableGroups = [];
+      let availableTags = [];
+      try {
+        const [groups, tags] = await Promise.all([listGroups({}), listTags()]);
+        availableGroups = groups.map((group) => group.name);
+        availableTags = tags.map((tag) => tag.name);
+      } catch {
+        // The lists are a convenience; the question still stands without them.
+      }
+      console.log(JSON.stringify({
+        command: "create",
+        needsAttributes: true,
+        name: options.name,
+        availableGroups,
+        availableTags,
+        message: "Ask the user which group, remark, and tags to apply, then re-run with --group, --notes, and --label plus --confirm-attributes. Pass --accept-defaults to create in the default group with no remark and no tags.",
+      }, null, 2));
+      process.exitCode = 2;
+      return;
+    }
     if (wantsAttributes && !options.confirmAttributes && !options.dryRun) {
       confirmationRequired("create", {
         requested: { name: options.name, notes: options.notes, labels: options.labels, group: options.group },
@@ -942,10 +976,18 @@ async function main() {
       }
     }
     const result = await createEnvironment({ ...options, attributes });
+    const skipped = result.skippedAttributes;
+    const appliedAttributes = attributes
+      ? {
+          ...(attributes.notes !== undefined ? { notes: attributes.notes } : {}),
+          ...(attributes.groupName ? { group: attributes.groupName } : {}),
+          ...(attributes.labelNames && !skipped?.labels ? { labels: attributes.labelNames } : {}),
+        }
+      : undefined;
     console.log(JSON.stringify({
       command: "create",
       ...result,
-      appliedAttributes: attributes ? { notes: attributes.notes, group: attributes.groupName, labels: attributes.labelNames } : undefined,
+      appliedAttributes,
     }, null, 2));
     return;
   }

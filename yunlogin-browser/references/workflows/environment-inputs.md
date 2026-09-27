@@ -23,6 +23,20 @@ a partial `browser` object drops the fields it omits. The local update route
 patches only the fields it receives, which makes it the safer choice for a small
 change on an environment that already carries accounts, cookies, or a proxy.
 
+The two create routes read the presentation attributes from different places,
+and the local route silently ignores a wrong one:
+
+| Attribute | Server route | Local route |
+| --- | --- | --- |
+| Remark | `browser.notes` | `browser[].notes` |
+| Group | `browser.categoryid` | `browser[].accounts.groupid` |
+| Tags | `browser.labelid` | Not supported. Tags cannot be set on this route. |
+
+A top-level `groupid` on the local route is accepted and then ignored, which is
+how an environment ends up in the default group. Ask the user which group,
+remark, and tags to apply before creating; `scripts/yunlogin-env.mjs create`
+stops with `needsAttributes` when none were given.
+
 ## Input Sources
 
 | Write field | Read it from | Notes |
@@ -169,3 +183,5 @@ returned zero matches.
 | `[REDACTED]` appears in a value you need | The helper redacted a sensitive field. Re-read the source route instead of using the redacted copy. |
 | The environment keeps its old values | The body omitted the field, or `browser.shopid` was not set, so a second environment was created. |
 | The list shows "proxy deleted" | The proxy block was empty. Send the direct-connection block or a resolved stored proxy. |
+| The environment landed in the default group | The local route was given a top-level `groupid`, which it ignores. Send `accounts.groupid`. |
+| Tags are missing after a create | The create fell back to the local route, which has no tag field. Create with `--transport server` when tags matter. |

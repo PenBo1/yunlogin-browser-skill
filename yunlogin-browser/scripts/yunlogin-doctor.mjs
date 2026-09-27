@@ -225,6 +225,14 @@ async function checkBehaviour() {
   const envCreate = runNode("scripts/yunlogin-env.mjs", ["create", "--name", "doctor-probe", "--notes", "probe"]);
   checks.push(["attribute write needs confirmation", envCreate.status === 2, `exit ${envCreate.status}`]);
 
+  const acceptDefaults = runNode("scripts/yunlogin-env.mjs", ["create", "--name", "doctor-dry-probe", "--accept-defaults", "--dry-run"]);
+  const acceptPayload = parseTrailingJson(acceptDefaults.stdout);
+  checks.push([
+    "create dry-run with defaults",
+    acceptDefaults.status === 0 && acceptPayload?.dryRun === true,
+    acceptDefaults.status === 0 ? "the documented default path still plans a body" : acceptDefaults.stderr.trim().slice(0, 120),
+  ]);
+
   const cdpUsage = runNode("scripts/yunlogin-cdp.mjs", []);
   checks.push(["cdp usage guard", cdpUsage.status !== 0 && /Usage:/i.test(cdpUsage.stderr), `exit ${cdpUsage.status}`]);
 
@@ -264,6 +272,24 @@ async function checkLive() {
   const serverProbe = runNode("scripts/yunlogin-server-api.mjs", ["browser-settings"]);
   const serverPayload = parseTrailingJson(serverProbe.stdout);
   record("live:server-read", serverProbe.status === 0 && Number(serverPayload?.code) === 200, `code=${serverPayload?.code ?? serverProbe.status}`);
+
+  // Creating with no attribute flag must stop and ask, and must not create anything.
+  const gateProbeName = "doctor-attributes-probe";
+  const gate = runNode("scripts/yunlogin-env.mjs", ["create", "--name", gateProbeName]);
+  const gatePayload = parseTrailingJson(gate.stdout);
+  const gateList = runNode("scripts/yunlogin-server-api.mjs", ["browser-list", "--body", `{"shopname":"${gateProbeName}"}`]);
+  const createdByGate = (parseTrailingJson(gateList.stdout)?.shop ?? []).length;
+  const gateOk =
+    gate.status === 2 &&
+    gatePayload?.needsAttributes === true &&
+    Array.isArray(gatePayload?.availableGroups) &&
+    gatePayload.availableGroups.length > 0 &&
+    createdByGate === 0;
+  record(
+    "live:attribute-question",
+    gateOk,
+    gateOk ? `${gatePayload.availableGroups.length} groups offered and nothing created` : `exit ${gate.status}, created ${createdByGate}`,
+  );
 
   // A skew larger than the token lifetime forces the proactive refresh path.
   const forcedRefresh = runNode("scripts/yunlogin-server-api.mjs", ["browser-settings"], {

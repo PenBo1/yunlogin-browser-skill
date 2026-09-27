@@ -78,7 +78,10 @@ Resolve every field of a create or modify from its documented source before writ
 
 Creation, deletion, grouping, and tagging are mutations. Confirm the target with the user first.
 
+- Before creating, ask the user which group, remark, and tags to apply. `create` with no attribute flag stops with exit code 2 and prints `needsAttributes` together with the real group and tag names, so the question can be concrete.
+- Pass the chosen values back as `--group`, `--notes`, and `--label`, then `--confirm-attributes`. Pass `--accept-defaults` only when the user really wants the default group with no remark and no tags.
 - `create` refuses a remark, tag, or group until `--confirm-attributes` is passed.
+- Tags need the server route. The local create route has no tag field, so a local fallback reports `skippedAttributes` instead of claiming the tags were applied.
 - Every delete command refuses to run until `--confirm-delete` (or `--confirm-clean`) is passed.
 - Without the flag the helper exits with code 2 and a `needsConfirmation` payload instead of acting.
 
