@@ -68,6 +68,8 @@ Read [references/workflows/token-lifecycle.md](./references/workflows/token-life
 
 Read [references/workflows/environment-lifecycle.md](./references/workflows/environment-lifecycle.md) before touching environments, groups, or tags.
 
+Resolve every field of a create or modify from its documented source before writing. `putalluri` is an upsert keyed by `browser.shopid`, and a read response is not a valid write body. Read [references/workflows/environment-inputs.md](./references/workflows/environment-inputs.md) for the input map and the field type rules.
+
 - Create and delete through the server API first and the local API second.
 - Use `scripts/yunlogin-env.mjs` so every step stays on a documented route.
 - Names are normalized before sending: unsupported characters collapse to a dash, and the result is capped at 32 characters. Keep names short and put detail in the remark.
@@ -133,5 +135,6 @@ Never place tokens, Cookies, proxy credentials, account passwords, 2FA secrets, 
 - Read [scripts/README.md](scripts/README.md) when selecting or maintaining a helper.
 - Keep all skill text in English.
 - Read [references/testing.md](references/testing.md) for current coverage and [references/server-api/TEST_REPORT.md](references/server-api/TEST_REPORT.md) for per-endpoint results.
+- Run `node scripts/yunlogin-doctor.mjs` after any change. It checks structure, catalog consistency, secret and encoding hygiene, and the behaviour of every helper CLI; add `--live` to probe the running desktop and the cached server session.
 - After changing either reference set or a catalog consumer, run `node scripts/dev/validate-api-docs.mjs`.
 - Keep the helpers separated: the local helper must not accept a server origin, and the server helper must not accept a loopback origin.

@@ -12,6 +12,10 @@
 
 Clones one or more existing environments. The clone copies the fingerprint, proxy binding, group, tags, and remark of the source environment and receives a new environment ID.
 
+Only those fields are documented as copied. Account bindings, stored Cookies, and the login state are not covered by this document, so do not assume a clone inherits them. Read the clone back with `fingerprint-uri` or `browser-cookie` when the workflow depends on them.
+
+The response carries no clone ID. Resolve the new environment with `browser-list` filtered by the source name, and confirm the exact row by ID before using it.
+
 This is a mutation that creates real environments. Confirm the source environment and the clone count with the user before sending the request.
 
 ## Request

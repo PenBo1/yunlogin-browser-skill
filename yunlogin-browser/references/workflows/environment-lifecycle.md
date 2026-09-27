@@ -10,6 +10,7 @@ Creation and deletion prefer the server API and fall back to the local API. List
 | --- | --- | --- | --- |
 | Create environment | server | `POST /v2/newbrowser/putalluri` | `POST /api/v2/userapi/user/create` |
 | List environments | server | `POST /v2/newbrowser/getconditionshops` | `POST /api/v2/userapi/user/shopseriallist` |
+| Clone environment | server | `POST /v2/newbrowser/batchCloneShop` | none |
 | Delete environment | server | `POST /v2/newbrowser/putdeleteshop` | `POST /api/v2/userapi/user/delete` |
 | List groups | server | `POST /v2/newbrowser/getgroups` | none |
 | Create or rename group | server | `POST /v2/newbrowser/putnewgroup` | none |
@@ -163,6 +164,8 @@ Show the user the exact environment name, ID, group, or tag before confirming. D
 2. `POST /v2/newbrowser/getdefaultfingerlist` returns the kernel ID, UA version, screen sizes, CPU and memory presets, and WebGL data.
 3. `POST /api/v1/client/gpu_info` on port 52446 returns the local adapters used for `WebGLVendor` and `WebGLRenderer` when the service is available.
 4. The helper assembles `{ number, randProxy, batch_platform_id, batch_custom_id, batchProxy, browser }` and posts it to `putalluri`.
+
+Every field of that body has a documented source. A modify uses the same schema with `browser.shopid` set to the target, because `putalluri` is an upsert. Read [environment-inputs.md](./environment-inputs.md) for the input map, both sequences, and the field type rules that apply when a read response is reused.
 
 Pass `--template-file <file.json>` to supply a known-good browser template instead. The file may contain either the full request body or only the `browser` object.
 

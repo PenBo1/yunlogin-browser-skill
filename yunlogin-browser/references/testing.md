@@ -2,6 +2,24 @@
 
 This document records the verification performed for the YunLogin Browser skill. Tokens, account IDs, environment IDs, proxy IDs, and cookies used during testing are not stored here.
 
+## Skill Self-Test
+
+`scripts/yunlogin-doctor.mjs` is the skill's own test. It is read-only and exits
+non-zero when any check fails.
+
+| Check | What it proves |
+| --- | --- |
+| structure | Every file the workflow depends on is present. |
+| catalog | The server catalog, its documents, and the local index agree on id, method, path, and required sections. |
+| no-secrets | No token-like value is stored anywhere in the skill text. |
+| ascii-only | All skill text is ASCII, so no encoding-dependent rendering creeps in. |
+| license-parity | The repository root `LICENSE` matches the skill copy byte for byte. |
+| frontmatter | `SKILL.md` keeps a valid `name` and `description`. |
+| behaviour | Each helper CLI runs and keeps its guards: dry-run works, unknown endpoint ids are refused, and mutations still require their confirmation flags. |
+| `--live` | The loopback API, the port 52446 client service, the cached server session, and one cataloged server read answer correctly. |
+
+Result on 2026-09-27: 14 offline checks and 4 live checks passed.
+
 ## Local API
 
 All 23 documented local API routes were exercised.
@@ -79,6 +97,22 @@ The creation, capture, and cleanup chain was exercised against the tested accoun
 | Environment name normalization | Chinese names preserved; `My Env // 01` became `My-Env-01`; `***` was rejected |
 
 See `server-api/README.md` and the endpoint documents for the per-route test result.
+
+### Environment Write Inputs
+
+The create and modify input chain was exercised on 2026-09-27. See
+[workflows/environment-inputs.md](workflows/environment-inputs.md) for the full
+map.
+
+| Check | Result |
+| --- | --- |
+| `POST /v2/team/myCompanies` | `code: 200`; five companies, each carrying `companyId`. |
+| `POST /v2/newbrowser/getdefaultfingerlist` for Windows 10 / Chrome / 141 | `code: 200`; 17 kernel builds plus the UA, CPU, and memory presets. |
+| `POST /v2/newbrowser/getfingerprinturi` without `shopid` | `code: 200`; returned the base template. |
+| `POST /v2/newbrowser/getfingerprinturi` with `shopid` | `code: 200`; returned `browseinfo` and a 50-field `defaultfingerprint`. |
+| `POST /v2/newbrowser/putalluri` with `browser.shopid` set | `code: 200`; the same `shopid` came back, no duplicate row appeared, and the changed `notes` read back. |
+| `POST /v2/newbrowser/putalluri` with `browseinfo` sent unchanged | `code: 500` unmarshal errors on `user_password_ids` and `fingerprint.enableCookie`; nothing was written. |
+| Temporary environments used for these checks | Deleted; a follow-up `getconditionshops` returned zero matches. |
 
 ## CDP and Playwright CLI
 

@@ -14,7 +14,7 @@ references/
   api/              local desktop API, port 50213 (23 endpoint documents)
   client-api/       local client helper service, port 52446
   server-api/       management center: catalog, indexes, error contract, endpoint documents
-  workflows/        task guides: environments, tokens, CDP, Playwright CLI
+  workflows/        task guides: environments, environment inputs, tokens, CDP, Playwright CLI
   testing.md        what was verified and how
 ```
 
@@ -38,6 +38,7 @@ The split matters: use the server API to decide **what** to operate, and the loc
 | See or filter environments | Server | `browser-list` |
 | Read the preferences behind the environment list | Server | `browser-settings` |
 | Build a creation template | Server | `fingerprint-uri` then `fingerprint-defaults` |
+| Resolve every input for a create or modify | Server | [environment-inputs.md](./workflows/environment-inputs.md) |
 | Create, clone, or delete an environment | Server | `environment-create`, `environment-clone`, `environment-delete` |
 | Read stored Cookies of an environment | Server | `browser-cookie` |
 | See which account users belong to environments | Server | `account-users-get` |

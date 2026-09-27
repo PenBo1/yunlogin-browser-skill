@@ -13,11 +13,12 @@ scripts/
   yunlogin-auth.mjs         token setup, status, and refresh
   yunlogin-env.mjs          environment, group, and tag lifecycle
   yunlogin-cdp.mjs          launch, CDP attach, and token capture
+  yunlogin-doctor.mjs       read-only self-test for the whole skill
   lib/                      shared modules imported by the commands
   dev/                      maintenance tooling, not run by hand during normal work
 ```
 
-Only the five `yunlogin-*.mjs` files are commands a user runs. `lib/` holds code the commands import, and `dev/` holds the documentation validator the maintainer runs after editing references.
+Only the six `yunlogin-*.mjs` files are commands a user runs. `lib/` holds code the commands import, and `dev/` holds the documentation validator the maintainer runs after editing references.
 
 ## Script Overview
 
@@ -29,7 +30,25 @@ Only the five `yunlogin-*.mjs` files are commands a user runs. `lib/` holds code
 | `yunlogin-cdp.mjs` | Local/CDP | Launch a local environment or connect to a CDP endpoint | Connects to localhost or an explicit CDP URL only when using connection commands | Optional session output with `--output` |
 | `yunlogin-auth.mjs` | Local/Server | Verify, save, and refresh the cached local and server tokens | Connects to the loopback service and the server origin only for the requested command | Writes the user-level token cache only |
 | `lib/local-token-store.mjs` | Local | Resolve, read, and write the cached local API token outside the skill | No | Writes the token cache file only |
+| `yunlogin-doctor.mjs` | All | Self-test the skill: structure, catalogs, hygiene, and helper behaviour | Only with `--live` | No |
 | `dev/validate-api-docs.mjs` | Documentation | Verify local and server documentation, indexes, and endpoint definitions | No | No |
+
+## Self Test
+
+`yunlogin-doctor.mjs` verifies the skill before a workflow depends on it. It is read-only: no check creates, updates, or deletes anything.
+
+```powershell
+node scripts/yunlogin-doctor.mjs
+node scripts/yunlogin-doctor.mjs --live
+node scripts/yunlogin-doctor.mjs --json
+```
+
+| Mode | Checks |
+| --- | --- |
+| default | Required files, catalog and document agreement, token-like strings, ASCII-only text, LICENSE parity, frontmatter, and the observable exit behaviour of every helper CLI. |
+| `--live` | Adds read-only probes of the loopback API on 50213, the client service on 52446, the cached server session, and one cataloged server read. |
+
+Every check prints `PASS` or `FAIL` and the command exits non-zero when any check fails. Use `--json` for machine-readable output.
 
 ## Token Setup
 
