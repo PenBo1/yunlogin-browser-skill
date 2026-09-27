@@ -61,7 +61,7 @@ node scripts/yunlogin-auth.mjs refresh-server-token
 node scripts/yunlogin-auth.mjs ensure-local --confirm-create
 ```
 
-Replace a credential only when it stops working. A rejected local token is captured again; a rejected server token is deleted and needs a fresh value from the user. Never print, commit, or paste a token, and keep the cache files outside the repository.
+The local token is replaced only when it stops working: a rejected one is captured again. The server token is refreshed before it expires. Every server call refreshes first when the remaining lifetime is inside the refresh window, which defaults to 24 hours and can be changed with `YUNLOGIN_SERVER_REFRESH_SKEW_MS`. A rejected server token is deleted and needs a fresh value from the user. Never print, commit, or paste a token, and keep the cache files outside the repository.
 
 Read [references/workflows/token-lifecycle.md](./references/workflows/token-lifecycle.md) for storage paths, resolution order, and the refresh rules.
 
