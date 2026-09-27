@@ -34,7 +34,7 @@ change on an environment that already carries accounts, cookies, or a proxy.
 | `browser.kernelId` | `POST /v2/newbrowser/getdefaultfingerlist` | `10000 + major version`. Chrome 141 is `10141`. |
 | `browser.fingerprint` | `POST /v2/newbrowser/getdefaultfingerlist`, then the top-level `defaultfingerprint` object returned by `getfingerprinturi` | Start from `defaultfingerprint` and apply the type rules below. It is a sibling of `browseinfo`, not a field inside it. |
 | `browser.proxy` (direct) | none | Send the direct-connection block from [environment-create.md](../server-api/endpoints/environment-create.md). |
-| `browser.proxy` (stored) | `POST /v2/proxy/device/findDeviceProxyUserSelves` or `POST /v2/proxy/device/vcnplist` | Copy `type`, `uuid`, `name`, `product`, and the matching protocol sub-object from the selected row. |
+| `browser.proxy` (stored) | `POST /v2/proxy/device/findDeviceProxyUserSelves` or `POST /v2/proxy/device/vcnplist` | Build the block from the selected row. See the official-proxy shape below. |
 | `browser.accounts` | `POST /v2/newbrowser/getUserPasswordList` | Send `{"url":[],"cookie":"[]"}` when no account is bound. |
 | `companyid`, `userid` | `POST /v2/team/myCompanies` | The read response spells the field `companyId`; the write body spells it `companyid`. The helper fills both from the cached session. |
 | current values for a modify | `POST /v2/newbrowser/getfingerprinturi` with `{"shopid":"<id>"}` | Returns `browseinfo` (current values) and `defaultfingerprint` (defaults). |
@@ -43,6 +43,41 @@ change on an environment that already carries accounts, cookies, or a proxy.
 `getfingerprinturi` also answers without a `shopid`. In that form it returns the
 base template for the requested kernel and is the template source used by
 `create`.
+
+### Official Proxy Block
+
+A stored official proxy needs its own block. The management center sends the
+shape below; the credential fields are placeholders here and must never be
+written into the skill, a log, or a response.
+
+```json
+{
+  "dns": { "mode": false, "inside": true },
+  "deviceType": "official",
+  "inlie": "official",
+  "name": "<proxy name>",
+  "uuid": "<proxy uuid>",
+  "PublicIP": "<public ip>",
+  "product": 2,
+  "type": "socks5",
+  "socks5": { "Addr": "<host:port>", "User": "<proxy user>", "Passwd": "<proxy password>" },
+  "region": "random-random-random",
+  "ipChannel": "ipinfo",
+  "randEnv": false,
+  "proxyaddrArr": null
+}
+```
+
+| Field | Comes from |
+| --- | --- |
+| `uuid` | The proxy row `uuid`; it becomes `proxyId` on the environment. |
+| `name` | The proxy row `name`. |
+| `PublicIP` | The proxy row `PublicIP`. |
+| `product` | The proxy row `product`. |
+| `type` and the matching sub-object | The proxy protocol. `socks5` uses `Addr`, `User`, and `Passwd`; the same pattern applies to `http`, `https`, and `ssh`. |
+
+Read the environment back after the write and confirm `device_type` and
+`proxyDel`. A block that the server stores blank shows up as "proxy deleted".
 
 ## Create Sequence
 
@@ -123,6 +158,7 @@ returned zero matches.
 | `putalluri` with `browser.shopid` set to an existing environment | `code: 200`; the same `shopid` was returned, no duplicate row appeared, and the changed `notes` read back. The existing `device_type` was preserved. |
 | `putalluri` with `browseinfo` sent unchanged | `code: 500` with the unmarshal errors listed above; nothing was written. |
 | `my-companies` | `code: 200`; five companies, each with a `companyId` field. |
+| `putalluri` with the official-proxy block and `browser.shopid` set | `code: 200`; the same `shopid` came back, and the read-back showed `device_type: official`, `ipChannel: ipinfo`, the supplied `proxyId`, and `proxyDel: 0` |
 
 ## Common Failures
 

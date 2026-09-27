@@ -113,6 +113,7 @@ map.
 | `POST /v2/newbrowser/getfingerprinturi` with `shopid` | `code: 200`; returned `browseinfo` and a 50-field `defaultfingerprint`. |
 | `POST /v2/newbrowser/putalluri` with `browser.shopid` set | `code: 200`; the same `shopid` came back, no duplicate row appeared, and the changed `notes` read back. |
 | `POST /v2/newbrowser/putalluri` with `browseinfo` sent unchanged | `code: 500` unmarshal errors on `user_password_ids` and `fingerprint.enableCookie`; nothing was written. |
+| `putalluri` with an official proxy block and `browser.shopid` set | `code: 200`; the read-back showed `device_type: official`, `ipChannel: ipinfo`, the supplied `proxyId`, and `proxyDel: 0`. |
 | Temporary environments used for these checks | Deleted; a follow-up `getconditionshops` returned zero matches. |
 
 ## CDP and Playwright CLI
