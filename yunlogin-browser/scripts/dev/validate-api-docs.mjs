@@ -303,6 +303,7 @@ assert(createDoc.includes("deviceType"), "environment-create.md must document th
 const lifecycleDoc = await readFile(path.join(skillDir, "references", "workflows", "environment-lifecycle.md"), "utf8");
 assert(lifecycleDoc.includes("Proxy Configuration"), "Environment lifecycle guide must document proxy configuration");
 assert(lifecycleDoc.includes("random-random-random"), "Environment lifecycle guide must show the direct proxy template");
+assert(lifecycleDoc.includes("user/update"), "Environment lifecycle guide must document how to repair a blank proxy block");
 assert(skillSource.includes("tag-colors.md"), "SKILL.md must link the tag colour guide");
 assert(lifecycleGuide.includes("putdeleteshop"), "Environment lifecycle guide must document the server delete route");
 assert(lifecycleGuide.includes("confirm-attributes"), "Environment lifecycle guide must document attribute confirmation");

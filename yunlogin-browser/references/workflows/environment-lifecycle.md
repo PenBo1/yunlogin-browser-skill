@@ -80,6 +80,42 @@ Confirm the result with `browser-list`:
 
 To attach a stored proxy later, resolve it with `proxy-self-list` or `proxy-cloud-list` and set `type` and `uuid` in the proxy block. Pass a complete `browser` object with `--template-file` when you need a proxy binding the helper does not build itself.
 
+### Repairing An Environment With A Blank Proxy
+
+An environment created before this fix still carries the blank proxy block. Repair it instead of deleting it, using the local update route:
+
+1. Resolve the environment ID with `browser-list`.
+2. Send a local update that sets the proxy to the direct type. Write the body to a file so the environment name survives the shell.
+
+```json
+{
+  "browser": [
+    {
+      "browserid": "<account id>",
+      "name": "<environment name>",
+      "notes": "",
+      "proxy": { "type": "local", "ipChannel": "ipinfo" }
+    }
+  ]
+}
+```
+
+```powershell
+node scripts/yunlogin-api.mjs local POST /api/v2/userapi/user/update --body-file repair.json
+```
+
+3. Re-read the environment and confirm the repair:
+
+| Field | Expected after repair |
+| --- | --- |
+| `device_type` | `local` |
+| `proxy.inlie` | `local` |
+| `proxy.ipChannel` | `ipinfo` |
+| `proxyip` | The detected egress IP |
+
+The route returns `code: 0` per updated entry. Verified on a live environment: `device_type` and `inlie` moved from empty strings to `local`, `ipChannel` became `ipinfo`, and the server filled `proxyip` with the detected egress IP. The `region` field stays empty for a direct connection on this route; that is expected.
+
+
 ## Notes, Tags, And Groups
 
 An environment template carries three presentation attributes:
