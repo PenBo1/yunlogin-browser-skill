@@ -13,9 +13,9 @@ Every cataloged server route was exercised against `https://d126447d359e70c0.yun
 
 | Result | Count |
 | --- | ---: |
-| HTTP 200 with business `code: 200` | 49 |
+| HTTP 200 with business `code: 200` | 50 |
 | HTTP 404, route not served by this deployment | 3 |
-| Total cataloged routes | 52 |
+| Total cataloged routes | 53 |
 
 ## Full Results
 
@@ -73,6 +73,7 @@ Every cataloged server route was exercised against `https://d126447d359e70c0.yun
 | `role-department-meal` | POST | `/v2/team/company/getRoleDepartmentMeal` | 200 | 200 | 1837 | 139 |  |
 | `authentication-check` | GET | `/v2/team/authentication/check` | 200 | 200 | 389 | 224 |  |
 | `my-user-info` | POST | `/v2/sso/auth/myUserinfo` | 200 | 200 | 810 | 77 |  |
+| `token-refresh` | POST | `/v2/sso/auth/tokenRefresh` | 200 | 200 | 389 | 163 | added 2026-09-27; returns an explicit expire |
 
 Time is the measured round-trip latency of a single call and is recorded only as an order-of-magnitude indicator.
 

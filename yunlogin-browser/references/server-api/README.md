@@ -26,7 +26,7 @@ The server origin is fixed by the catalog to `https://d126447d359e70c0.yunlogin.
 
 ## Tested Endpoints
 
-All 52 endpoints were tested on 2026-09-24. Forty-nine returned HTTP 200 with business `code: 200`; three returned HTTP 404 on the tested origin and are marked unavailable in their endpoint documents.
+All 53 endpoints were tested. Fifty returned HTTP 200 with business `code: 200`; three returned HTTP 404 on the tested origin and are marked unavailable in their endpoint documents. The original sweep ran on 2026-09-24 and `token-refresh` was added on 2026-09-27 from a live call.
 
 | Endpoint ID | Method | Path | Documentation |
 | --- | --- | --- | --- |
@@ -82,6 +82,7 @@ All 52 endpoints were tested on 2026-09-24. Forty-nine returned HTTP 200 with bu
 | `role-department-meal` | POST | `/v2/team/company/getRoleDepartmentMeal` | [role-department-meal.md](endpoints/role-department-meal.md) |
 | `authentication-check` | GET | `/v2/team/authentication/check` | [authentication-check.md](endpoints/authentication-check.md) |
 | `my-user-info` | POST | `/v2/sso/auth/myUserinfo` | [my-user-info.md](endpoints/my-user-info.md) |
+| `token-refresh` | POST | `/v2/sso/auth/tokenRefresh` | [token-refresh.md](endpoints/token-refresh.md) |
 
 ## Discovery
 

@@ -10,6 +10,7 @@
 
 import { readFile } from "node:fs/promises";
 import { readServerIdentity, readServerToken } from "./lib/local-token-store.mjs";
+import { ensureFreshServerSession } from "./lib/server-token.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -284,6 +285,14 @@ function headersForDisplay(headers) {
   );
 }
 
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
 function isBusinessSuccess(catalog, payload) {
   if (!payload || typeof payload !== "object" || !Object.hasOwn(payload, "code")) {
     return true;
@@ -316,6 +325,17 @@ async function main() {
   for (const [name, value] of Object.entries(query)) {
     if (value !== undefined && value !== null) url.searchParams.set(name, String(value));
   }
+// Keep the cached session warm before the call. A refresh failure must not
+  // block the request: the response below reports the real server answer.
+  try {
+    const session = await ensureFreshServerSession({ verify: false });
+    if (session.refreshed) {
+      console.error(`Refreshed the server token; it now expires at ${session.expiresAt ?? "an unknown time"}.`);
+    }
+  } catch {
+    // The cached token may still be usable, so continue and let the call decide.
+  }
+
   const headers = await buildHeaders(endpoint.method);
   const requestBody = endpoint.method === "GET" ? undefined : JSON.stringify(body);
   const timeoutMs = Number.parseInt(process.env.YUNLOGIN_TIMEOUT_MS ?? "30000", 10);
@@ -341,17 +361,32 @@ async function main() {
     return;
   }
 
-  const response = await fetch(url, {
-    method: endpoint.method,
-    headers,
-    body: requestBody,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  const responseText = await response.text();
+  async function send(requestHeaders) {
+    const response = await fetch(url, {
+      method: endpoint.method,
+      headers: requestHeaders,
+      body: requestBody,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const responseText = await response.text();
+    return { response, responseText, parsed: parseJson(responseText) };
+  }
+
+  let { response, responseText, parsed } = await send(headers);
+
+  // A rejected bearer token is the one failure the helper can repair itself.
+  if (parsed?.code === 1001) {
+    const refreshed = await ensureFreshServerSession({ force: true, verify: false }).catch(() => ({ refreshed: false }));
+    if (refreshed.refreshed) {
+      console.error("The bearer token was rejected; refreshed the session and retrying once.");
+      ({ response, responseText, parsed } = await send(await buildHeaders(endpoint.method)));
+    }
+  }
+
   console.error(`${response.status} ${response.statusText}`);
-  let parsed;
-  try {
-    parsed = JSON.parse(responseText);
+  if (parsed === undefined) {
+    console.log(responseText);
+  } else {
     console.log(
       JSON.stringify(options.showSensitive ? parsed : redact(parsed, "", endpoint.redact_keys ?? []), null, 2),
     );
@@ -359,9 +394,6 @@ async function main() {
       console.error(`Business error: code=${parsed.code}${parsed.msg ? ` msg=${parsed.msg}` : ""}`);
       process.exitCode = 1;
     }
-  } catch {
-    parsed = undefined;
-    console.log(responseText);
   }
   if (!response.ok) process.exitCode = 1;
 }

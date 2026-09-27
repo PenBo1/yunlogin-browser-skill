@@ -21,9 +21,13 @@ Both files live in the user profile, outside the repository:
 | File | Contents |
 | --- | --- |
 | `local-token.json` | Local token plus its capture time |
-| `server-token.json` | Server token plus the company and user context that management-center routes require |
+| `server-token.json` | Server token, its expiry, the last refresh time, and the company and user context that management-center routes require |
 
-The server session file keeps the company and user next to the token, so a saved session removes the need to export `YUNLOGIN_SERVER_COMPANY_ID` and `YUNLOGIN_SERVER_USER_ID` on every call.
+The server session file keeps the company and user next to the token, so a saved session removes the need to export `YUNLOGIN_SERVER_COMPANY_ID` and `YUNLOGIN_SERVER_USER_ID` on every call. It also records the expiry returned by `tokenRefresh`, which lets a helper refresh before a call instead of failing on it.
+
+### Why A Local Token Exists
+
+The desktop keeps a bearer value for the bundled extension, and the skill captures the same value so the loopback routes can be called with the header the desktop itself uses. On the tested build the local API does not enforce that header: a missing or deliberately wrong local token still answers `code: 0`. The capture is kept because other builds and the identity fields do use it. Treat `local-token.json` as a credential even where the current build ignores it.
 
 ## Resolution Order
 
@@ -39,6 +43,7 @@ Environment variables always win, so a script or CI job can override a saved ses
 node scripts/yunlogin-auth.mjs status
 node scripts/yunlogin-auth.mjs save-server-token
 node scripts/yunlogin-auth.mjs ensure-server
+node scripts/yunlogin-auth.mjs refresh-server-token
 node scripts/yunlogin-auth.mjs ensure-local --confirm-create
 node scripts/yunlogin-auth.mjs clear-server-token
 node scripts/yunlogin-auth.mjs clear-local-token --confirm-clear
@@ -48,7 +53,8 @@ node scripts/yunlogin-auth.mjs clear-local-token --confirm-clear
 | --- | --- |
 | `status` | Verifies both credentials and prints their storage paths. Never prints a token. |
 | `save-server-token` | Verifies a token, resolves the account identity, and stores the session. |
-| `ensure-server` | Verifies the stored server token and deletes it when the server rejects it. |
+| `ensure-server` | Verifies the stored server token, refreshes it when it is due, and deletes it when the server rejects it. |
+| `refresh-server-token` | Forces a `tokenRefresh` call and stores the replacement token with its expiry. |
 | `ensure-local` | Verifies the stored local token and captures a new one when the local API rejects it. |
 | `clear-server-token` | Deletes the cached server session. |
 | `clear-local-token` | Deletes the cached local token. Requires `--confirm-clear`. |
@@ -82,13 +88,33 @@ A credential is refreshed only when it stops working. A working token is left un
 | Local token accepted by the local API | Kept as is |
 | Local token rejected, or no local token stored | Captured again from the browser extension and the cache is overwritten |
 | No environment exists during a local refresh | Asks first, then creates a temporary environment when `--confirm-create` is passed, and deletes it again |
-| Server token accepted | Kept as is |
+| Server token accepted and outside the refresh window | Kept as is |
+| Server token accepted but inside the refresh window | Exchanged at `tokenRefresh` for a token with a fresh expiry; the cache is rewritten |
 | Server token rejected | The stale cache file is deleted and the command reports that a fresh token is required |
 | `YUNLOGIN_SERVER_TOKEN` set and valid while the cache is empty or stale | The cache is rewritten from the environment value |
 
 The server token cannot be captured automatically. It comes from the management-center web session, so a rejected server token always needs a fresh value from the user. The helper deletes the stale file so the next call cannot silently reuse a credential the server already rejected.
 
 The local probe uses `POST /api/v2/userapi/user/shopseriallist`. Some desktop builds do not enforce the token on that route; on those builds a stored token always probes as usable and no refresh is attempted.
+
+## Server Token Refresh
+
+`POST /v2/sso/auth/tokenRefresh` exchanges the current bearer token for a new one
+and reports when the new token expires. The skill calls it so the cached session
+carries an explicit expiry instead of an unknown lifetime. The route itself is
+documented in [token-refresh.md](../server-api/endpoints/token-refresh.md).
+
+| Step | Detail |
+| --- | --- |
+| Source of the expiry | `data.expire` from the `tokenRefresh` response. The issued JWT carries a matching `exp` claim, so either value can drive the check. |
+| When a refresh happens | `save-server-token` refreshes right after it verifies the token, `refresh-server-token` forces a call, and every server request refreshes first when the remaining lifetime is inside the skew window. |
+| Default skew | 24 hours. Override with `YUNLOGIN_SERVER_REFRESH_SKEW_MS`. Setting it larger than the token lifetime forces a refresh before every call. |
+| Observed lifetime | 168 hours (7 days) counted from the call. |
+| On `code: 1001` | The helper refreshes once and retries the request once. If the refresh fails too, the original business error is reported and the command exits non-zero. |
+| On refresh failure | The existing cached token is left in place, because it may still be valid for the call being made. |
+
+A rejected token cannot repair itself: `tokenRefresh` needs a usable token to
+issue a new one. Only a fresh value from the user breaks that cycle.
 
 ## Token Bootstrap
 
@@ -120,3 +146,9 @@ Temporary environments use a short readable name, such as `skill-temp-141-0924-1
 | `ensure-server` with a deliberately stale token | Deleted the cache, returned `needsNewToken: true` with the server reason |
 | `ensure-local` on a build that does not enforce the token | Reported usable and did not refresh |
 | Environment helpers with no environment variables set | Server transport used the cached session for list, group-list, tag-list, delete, and bootstrap-token |
+| `refresh-server-token` | `refreshed: true`, token length 215, and the expiry moved from 101 hours to 168 hours |
+| `POST /v2/sso/auth/tokenRefresh` probed directly | HTTP 200, `code: 200`, `msg: ok`; `data.expire` matched the JWT `exp` claim to the second |
+| `tokenRefresh` with and without `ApiSource: 1` | Identical payload both ways, so the header is sent but not enforced on the tested origin |
+| A server read with the skew set above the token lifetime | Refreshed before the call, printed the new expiry, then returned `code: 200` |
+| A server read with a deliberately invalid token | Reported `code: 1001`, attempted no doomed retry, and exited 1 |
+| `server-token.json` after a refresh | Holds `token`, `captured_at`, `expires_at`, `expires_at_ms`, `refreshed_at`, `company_id`, `user_id`, and `company` |

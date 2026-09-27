@@ -139,6 +139,7 @@ Navigation for the 51 cataloged management-center endpoints. Use this page to fi
 | Endpoint ID | Method | Path | Purpose | Flag | Doc |
 | --- | --- | --- | --- | --- | --- |
 | `my-user-info` | POST | `/v2/sso/auth/myUserinfo` | Return the signed-in user profile; the standard token check. |  | [doc](endpoints/my-user-info.md) |
+| `token-refresh` | POST | `/v2/sso/auth/tokenRefresh` | Exchange the bearer token for a fresh one that carries an explicit expiry. |  | [doc](endpoints/token-refresh.md) |
 | `authentication-check` | GET | `/v2/team/authentication/check` | Return the account-level authentication state. |  | [doc](endpoints/authentication-check.md) |
 | `company-face-check` | GET | `/v2/team/authentication/companyFourElementsFaceCheck` | Return the company face verification state. |  | [doc](endpoints/company-face-check.md) |
 | `team-authentication-get` | POST | `/v2/team/authentication/get` | Company authentication detail route; not served by the tested origin. | unavailable | [doc](endpoints/team-authentication-get.md) |

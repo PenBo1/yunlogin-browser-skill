@@ -101,7 +101,7 @@ Key routes for launching: `POST /api/v2/browser/start` returns the CDP URL, `GET
 
 ## Server API
 
-52 cataloged management-center routes: 7 create or change data, 10 return credentials or account metadata, and 3 are not served by the tested origin.
+53 cataloged management-center routes: 7 create or change data, 10 return credentials or account metadata, and 3 are not served by the tested origin.
 
 | Flag | Meaning |
 | --- | --- |
@@ -203,6 +203,7 @@ Key routes for launching: `POST /api/v2/browser/start` returns the CDP URL, `GET
 | Endpoint ID | Method | Path | Purpose | Flag | Doc |
 | --- | --- | --- | --- | --- | --- |
 | `my-user-info` | POST | `/v2/sso/auth/myUserinfo` | Return the signed-in user profile; the standard token check. |  | [doc](server-api/endpoints/my-user-info.md) |
+| `token-refresh` | POST | `/v2/sso/auth/tokenRefresh` | Exchange the bearer token for a fresh one that carries an explicit expiry. |  | [doc](server-api/endpoints/token-refresh.md) |
 | `authentication-check` | GET | `/v2/team/authentication/check` | Return the account-level authentication state. |  | [doc](server-api/endpoints/authentication-check.md) |
 | `company-face-check` | GET | `/v2/team/authentication/companyFourElementsFaceCheck` | Return the company face verification state. |  | [doc](server-api/endpoints/company-face-check.md) |
 | `team-authentication-get` | POST | `/v2/team/authentication/get` | Company authentication detail route; not served by the tested origin. | unavailable | [doc](server-api/endpoints/team-authentication-get.md) |

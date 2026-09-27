@@ -51,12 +51,13 @@ The server API has no launch route, so an environment cannot be started from the
 
 ## Token Lifecycle
 
-Two credentials exist and are not interchangeable: the **local token** grants the loopback API and is captured from the bundled browser extension, and the **server token** grants the management-center API and is supplied by the user once. Both are cached in the user profile, outside this skill. The server cache also holds the company and user, so environment variables are optional once a session is saved.
+Two credentials exist and are not interchangeable: the **local token** grants the loopback API and is captured from the bundled browser extension, and the **server token** grants the management-center API and is supplied by the user once. Both are cached in the user profile, outside this skill. The server cache also holds the company and user, so environment variables are optional once a session is saved. It additionally records the expiry returned by `POST /v2/sso/auth/tokenRefresh`, and the helpers refresh before a call when that expiry is close, so a session stays warm without user action.
 
 ```powershell
 node scripts/yunlogin-auth.mjs status
 node scripts/yunlogin-auth.mjs save-server-token
 node scripts/yunlogin-auth.mjs ensure-server
+node scripts/yunlogin-auth.mjs refresh-server-token
 node scripts/yunlogin-auth.mjs ensure-local --confirm-create
 ```
 
@@ -111,7 +112,7 @@ node scripts/yunlogin-server-api.mjs browser-cookie --body '{"shopid":"<shopid>"
 node scripts/yunlogin-server-api.mjs proxy-cloud-list --query page=1 --query per_page=20
 ```
 
-The helper accepts only the 52 endpoints cataloged in [references/server-api/endpoints.json](references/server-api/endpoints.json) and never sends an arbitrary URL. All 52 were exercised on 2026-09-24; the evidence is in [references/server-api/TEST_REPORT.md](references/server-api/TEST_REPORT.md).
+The helper accepts only the 53 endpoints cataloged in [references/server-api/endpoints.json](references/server-api/endpoints.json) and never sends an arbitrary URL. All 53 have been exercised; the evidence is in [references/server-api/TEST_REPORT.md](references/server-api/TEST_REPORT.md).
 
 ## CDP Automation
 

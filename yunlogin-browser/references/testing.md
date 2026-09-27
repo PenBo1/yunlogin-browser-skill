@@ -16,9 +16,10 @@ non-zero when any check fails.
 | license-parity | The repository root `LICENSE` matches the skill copy byte for byte. |
 | frontmatter | `SKILL.md` keeps a valid `name` and `description`. |
 | behaviour | Each helper CLI runs and keeps its guards: dry-run works, unknown endpoint ids are refused, and mutations still require their confirmation flags. |
-| `--live` | The loopback API, the port 52446 client service, the cached server session, and one cataloged server read answer correctly. |
+| token-refresh wiring | The catalog resolves the refresh route, and a server read refreshes the session first when the remaining lifetime is inside the skew window. |
+| `--live` | The loopback API, the port 52446 client service, the cached server session, one cataloged server read, and the proactive refresh path answer correctly. |
 
-Result on 2026-09-27: 14 offline checks and 4 live checks passed.
+Result on 2026-09-27: 16 offline checks and 5 live checks passed.
 
 ## Local API
 
@@ -47,11 +48,11 @@ Summary: 23 local routes exercised; 21 success paths and 2 safe negative-validat
 Every cataloged route was exercised live on 2026-09-24. The per-endpoint HTTP status, business code, response size, and latency are recorded in [server-api/TEST_REPORT.md](server-api/TEST_REPORT.md); this section summarises the outcome.
 
 
-All 52 cataloged server routes were tested against the server origin.
+All 53 cataloged server routes were tested against the server origin.
 
 | Result | Count |
 | --- | ---: |
-| HTTP 200 with business `code: 200` | 49 |
+| HTTP 200 with business `code: 200` | 50 |
 | HTTP 404 and marked unavailable in the endpoint document | 3 |
 
 ## Environment Lifecycle
@@ -163,6 +164,21 @@ The two-credential model was exercised against the test account.
 | `save-server-token` without a token | Non-zero exit with a clear message; nothing written |
 | Server session cache path | `%LOCALAPPDATA%\yunlogin-browser\server-token.json` |
 | Skill files and package after all tests | No token-like value found |
+
+### Server Token Refresh
+
+Exercised on 2026-09-27 against the tested origin.
+
+| Check | Result |
+| --- | --- |
+| `POST /v2/sso/auth/tokenRefresh` with a valid token | HTTP 200, `code: 200`, `msg: ok`; returned a 215-character token and an explicit `expire` |
+| `expire` versus the JWT `exp` claim | Identical to the second |
+| Observed token lifetime | 168 hours (7 days) |
+| Refresh with and without `ApiSource: 1` | Identical payload both ways, so the header is sent but not enforced on the tested origin |
+| `scripts/yunlogin-auth.mjs refresh-server-token` | `refreshed: true`; the cache was rewritten with the new expiry |
+| Server read with `YUNLOGIN_SERVER_REFRESH_SKEW_MS` above the lifetime | Refreshed before the call, then returned `code: 200` |
+| Server read with a deliberately invalid token | Reported `code: 1001`, attempted no doomed retry, and exited 1 |
+| `server-token.json` fields after a refresh | `token`, `captured_at`, `expires_at`, `expires_at_ms`, `refreshed_at`, `company_id`, `user_id`, `company` |
 
 ## Safety Boundaries
 

@@ -1178,6 +1178,21 @@
         "http_status": 200,
         "code": 200
       }
+    },
+    {
+      "id": "token-refresh",
+      "method": "POST",
+      "path": "/v2/sso/auth/tokenRefresh",
+      "document": "endpoints/token-refresh.md",
+      "body_defaults": {},
+      "body_required": [],
+      "redact_keys": [
+        "token"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
     }
   ],
   "business_success_codes": [

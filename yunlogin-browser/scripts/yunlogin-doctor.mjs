@@ -46,11 +46,12 @@ async function exists(target) {
   }
 }
 
-function runNode(scriptRelativePath, scriptArgs) {
+function runNode(scriptRelativePath, scriptArgs, extraEnv) {
   const result = spawnSync(process.execPath, [path.join(skillDir, scriptRelativePath), ...scriptArgs], {
     cwd: skillDir,
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
+    env: extraEnv ? { ...process.env, ...extraEnv } : process.env,
   });
   return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
@@ -86,6 +87,7 @@ const REQUIRED_PATHS = [
   "scripts/yunlogin-env.mjs",
   "scripts/yunlogin-server-api.mjs",
   "scripts/lib/local-token-store.mjs",
+  "scripts/lib/server-token.mjs",
   "scripts/lib/tag-colors.mjs",
   "scripts/dev/validate-api-docs.mjs",
 ];
@@ -186,6 +188,30 @@ async function checkBehaviour() {
   const listPayload = parseTrailingJson(list.stdout);
   checks.push(["server-api --list", list.status === 0 && Array.isArray(listPayload?.endpoints), listPayload ? `${listPayload.count} endpoint ids` : list.stderr.trim().slice(0, 120)]);
 
+  const tokenRefreshDryRun = runNode("scripts/yunlogin-server-api.mjs", ["token-refresh", "--dry-run"]);
+  const tokenRefreshPlan = parseTrailingJson(tokenRefreshDryRun.stdout);
+  const tokenRefreshWired =
+    tokenRefreshDryRun.status === 0 &&
+    tokenRefreshPlan?.url?.endsWith("/v2/sso/auth/tokenRefresh") === true &&
+    tokenRefreshPlan?.method === "POST";
+  checks.push([
+    "token-refresh cataloged",
+    tokenRefreshWired,
+    tokenRefreshWired ? "dry-run resolves the refresh route" : tokenRefreshDryRun.stderr.trim().slice(0, 120),
+  ]);
+
+  const importCheck = spawnSync(
+    process.execPath,
+    ["-e", "import('./scripts/yunlogin-auth.mjs').then(() => console.log('ok'))"],
+    { cwd: skillDir, encoding: "utf8" },
+  );
+  const importsResolve = importCheck.status === 0 && importCheck.stdout.includes("ok");
+  checks.push([
+    "auth helper imports",
+    importsResolve,
+    importsResolve ? "module graph resolves without running a command" : importCheck.stderr.trim().slice(0, 120),
+  ]);
+
   const unknown = runNode("scripts/yunlogin-server-api.mjs", ["definitely-not-an-endpoint", "--dry-run"]);
   checks.push(["server-api rejects unknown id", unknown.status !== 0, `exit ${unknown.status}`]);
 
@@ -238,6 +264,18 @@ async function checkLive() {
   const serverProbe = runNode("scripts/yunlogin-server-api.mjs", ["browser-settings"]);
   const serverPayload = parseTrailingJson(serverProbe.stdout);
   record("live:server-read", serverProbe.status === 0 && Number(serverPayload?.code) === 200, `code=${serverPayload?.code ?? serverProbe.status}`);
+
+  // A skew larger than the token lifetime forces the proactive refresh path.
+  const forcedRefresh = runNode("scripts/yunlogin-server-api.mjs", ["browser-settings"], {
+    YUNLOGIN_SERVER_REFRESH_SKEW_MS: "999999999999",
+  });
+  const forcedPayload = parseTrailingJson(forcedRefresh.stdout);
+  const refreshedBeforeCall = /Refreshed the server token/.test(forcedRefresh.stderr);
+  record(
+    "live:token-refresh",
+    forcedRefresh.status === 0 && Number(forcedPayload?.code) === 200 && refreshedBeforeCall,
+    refreshedBeforeCall ? "refreshed the session before the call" : "no refresh was attempted",
+  );
 }
 
 async function main() {

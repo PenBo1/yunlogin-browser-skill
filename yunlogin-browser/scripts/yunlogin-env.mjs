@@ -34,6 +34,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readLocalToken, readServerIdentity, readServerToken } from "./lib/local-token-store.mjs";
+import { ensureFreshServerSession } from "./lib/server-token.mjs";
 import { DEFAULT_TAG_COLOR, colorName, describeTagColor, resolveTagColor } from "./lib/tag-colors.mjs";
 import { captureLocalToken } from "./yunlogin-cdp.mjs";
 
@@ -291,15 +292,31 @@ async function requestJson(base, requestPath, options = {}) {
 }
 
 async function serverRequest(requestPath, options = {}) {
-  return requestJson(serverOrigin(), requestPath, {
-    ...options,
-    headers: {
-      authorization: `Bearer ${await serverToken()}`,
-      lang: process.env.YUNLOGIN_SERVER_LANG ?? "zh",
-      "pay-lang": process.env.YUNLOGIN_SERVER_PAY_LANG ?? "zh-TW",
-      ...(options.headers ?? {}),
-    },
-  });
+  const send = async () =>
+    requestJson(serverOrigin(), requestPath, {
+      ...options,
+      headers: {
+        authorization: `Bearer ${await serverToken()}`,
+        lang: process.env.YUNLOGIN_SERVER_LANG ?? "zh",
+        "pay-lang": process.env.YUNLOGIN_SERVER_PAY_LANG ?? "zh-TW",
+        ...(options.headers ?? {}),
+      },
+    });
+
+  // Keep the cached session warm before the call. A refresh failure must not
+  // block a request that may still succeed with the cached token.
+  try {
+    await ensureFreshServerSession({ verify: false });
+  } catch {
+    // Ignore; the request below reports the real server answer.
+  }
+
+  let result = await send();
+  if (result.payload?.code === 1001) {
+    const refreshed = await ensureFreshServerSession({ force: true, verify: false }).catch(() => ({ refreshed: false }));
+    if (refreshed.refreshed) result = await send();
+  }
+  return result;
 }
 
 async function localRequest(requestPath, options = {}) {

@@ -35,6 +35,21 @@ async function writeSecret(filePath, payload) {
   return target;
 }
 
+// Read the exp claim without verifying the signature. The value is only used
+// to decide when to refresh, never to trust the token.
+export function jwtExpiryMs(token) {
+  if (typeof token !== "string") return undefined;
+  const parts = token.split(".");
+  if (parts.length < 2) return undefined;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    const exp = Number(payload?.exp);
+    return Number.isFinite(exp) ? exp * 1000 : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function resolveLocalTokenFilePath() {
   if (process.env.YUNLOGIN_LOCAL_TOKEN_FILE) return path.resolve(process.env.YUNLOGIN_LOCAL_TOKEN_FILE);
   return path.join(defaultCacheDir(), LOCAL_TOKEN_FILE_NAME);
@@ -76,11 +91,23 @@ export async function clearLocalToken(filePath = resolveLocalTokenFilePath()) {
 export async function readServerSession() {
   const payload = await readJsonFile(resolveServerTokenFilePath());
   if (!payload || typeof payload !== "object") return {};
+  const token = typeof payload.token === "string" && payload.token ? payload.token : undefined;
+  const storedMs = Number(payload.expires_at_ms);
+  const parsedMs = typeof payload.expires_at === "string" ? Date.parse(payload.expires_at) : NaN;
+  const expiresAtMs = Number.isFinite(storedMs)
+    ? storedMs
+    : Number.isFinite(parsedMs)
+      ? parsedMs
+      : jwtExpiryMs(token);
   return {
-    token: typeof payload.token === "string" && payload.token ? payload.token : undefined,
+    token,
     companyId: typeof payload.company_id === "string" && payload.company_id ? payload.company_id : undefined,
     userId: typeof payload.user_id === "string" && payload.user_id ? payload.user_id : undefined,
     company: typeof payload.company === "string" && payload.company ? payload.company : undefined,
+    expiresAt: typeof payload.expires_at === "string" ? payload.expires_at : undefined,
+    expiresAtMs,
+    refreshedAt: typeof payload.refreshed_at === "string" ? payload.refreshed_at : undefined,
+    capturedAt: typeof payload.captured_at === "string" ? payload.captured_at : undefined,
   };
 }
 
@@ -102,6 +129,12 @@ export async function readServerIdentity() {
 export async function writeServerSession(payload, filePath = resolveServerTokenFilePath()) {
   if (!payload?.token) throw new Error("Cannot write a server session without a token");
   const record = { token: payload.token, captured_at: new Date().toISOString() };
+  const expiresAtMs = Number.isFinite(payload.expiresAtMs) ? payload.expiresAtMs : jwtExpiryMs(payload.token);
+  if (Number.isFinite(expiresAtMs)) {
+    record.expires_at_ms = expiresAtMs;
+    record.expires_at = typeof payload.expiresAt === "string" ? payload.expiresAt : new Date(expiresAtMs).toISOString();
+  }
+  if (typeof payload.refreshedAt === "string" && payload.refreshedAt) record.refreshed_at = payload.refreshedAt;
   for (const [key, value] of [["company_id", payload.companyId], ["user_id", payload.userId], ["company", payload.company]]) {
     if (typeof value === "string" && value) record[key] = value;
   }

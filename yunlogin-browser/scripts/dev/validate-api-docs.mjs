@@ -69,9 +69,9 @@ assert(serverCatalog.surface === "server", "Server catalog surface must be serve
 assert(Array.isArray(serverCatalog.endpoints), "Server catalog must contain an endpoints array");
 assert(Array.isArray(serverCatalog.business_success_codes), "Server catalog must contain business_success_codes");
 assert(serverCatalog.business_success_codes.map(Number).includes(200), "Server success codes must include 200");
-assert(serverCatalog.endpoints.length === 52, `Expected 52 server endpoints, got ${serverCatalog.endpoints.length}`);
-assert(new Set(serverCatalog.endpoints.map((endpoint) => endpoint.id)).size === 52, "Server endpoint IDs are not unique");
-assert(new Set(serverCatalog.endpoints.map((endpoint) => endpoint.document)).size === 52, "Server endpoint document paths are not unique");
+assert(serverCatalog.endpoints.length === 53, `Expected 53 server endpoints, got ${serverCatalog.endpoints.length}`);
+assert(new Set(serverCatalog.endpoints.map((endpoint) => endpoint.id)).size === 53, "Server endpoint IDs are not unique");
+assert(new Set(serverCatalog.endpoints.map((endpoint) => endpoint.document)).size === 53, "Server endpoint document paths are not unique");
 const serverDocumentFiles = (await readdir(path.join(serverDir, "endpoints"))).filter((name) => name.endsWith(".md")).sort();
 assert(serverDocumentFiles.length === serverCatalog.endpoints.length, `Expected ${serverCatalog.endpoints.length} server endpoint documents, got ${serverDocumentFiles.length}`);
 
@@ -357,7 +357,7 @@ const testingPath = path.join(skillDir, "references", "testing.md");
 assert(await exists(testingPath), "Test coverage document is missing");
 const testingGuide = await readFile(testingPath, "utf8");
 assert(testingGuide.includes("All 23 documented local API routes were exercised"), "Local API test coverage summary is missing");
-assert(testingGuide.includes("All 52 cataloged server routes were tested"), "Server API test coverage summary is missing");
+assert(testingGuide.includes("All 53 cataloged server routes were tested"), "Server API test coverage summary is missing");
 assert(testingGuide.includes("Environment Lifecycle"), "Environment lifecycle coverage is missing");
 assert(testingGuide.includes("putalluri"), "Environment create evidence is missing");
 assert(testingGuide.includes("Playwright CLI"), "Playwright CLI test coverage is missing");

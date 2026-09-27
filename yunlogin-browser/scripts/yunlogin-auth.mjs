@@ -29,6 +29,10 @@ import {
   writeLocalToken,
   writeServerSession,
 } from "./lib/local-token-store.mjs";
+import {
+  refreshServerToken as refreshServerSession,
+  serverSessionStatus,
+} from "./lib/server-token.mjs";
 
 const DEFAULT_LOCAL_ORIGIN = "http://localhost:50213";
 const DEFAULT_SERVER_ORIGIN = "https://d126447d359e70c0.yunlogin.com";
@@ -42,6 +46,7 @@ function usage() {
   node scripts/yunlogin-auth.mjs status
   node scripts/yunlogin-auth.mjs save-server-token [--token-file FILE] [--company-id ID] [--user-id ID]
   node scripts/yunlogin-auth.mjs ensure-server
+  node scripts/yunlogin-auth.mjs refresh-server-token
   node scripts/yunlogin-auth.mjs ensure-local [--confirm-create] [--account-id ID]
   node scripts/yunlogin-auth.mjs clear-server-token
   node scripts/yunlogin-auth.mjs clear-local-token --confirm-clear
@@ -49,7 +54,8 @@ function usage() {
 Commands:
   status             Verify both tokens and print where each one is stored.
   save-server-token  Verify a server token and cache it with its company and user context.
-  ensure-server      Verify the cached server token; drop it when the server rejects it.
+  ensure-server      Verify the cached server token; refresh it when it is close to expiry, and drop it when the server rejects it.
+  refresh-server-token Force a tokenRefresh call and store the new token with its expiry.
   ensure-local       Verify the cached local token; capture a new one when the local API rejects it.
   clear-server-token Delete the cached server token.
   clear-local-token  Delete the cached local token. Requires --confirm-clear.
@@ -74,6 +80,7 @@ Environment:
   YUNLOGIN_SERVER_USER_ID     User override for identity resolution.
   YUNLOGIN_LOCAL_BASE_URL     Local origin override (loopback only).
   YUNLOGIN_SERVER_ORIGIN      Server origin override (https only).
+  YUNLOGIN_SERVER_REFRESH_SKEW_MS  Refresh when less than this remains (default 86400000).
 
 Examples:
   node scripts/yunlogin-auth.mjs status
@@ -257,18 +264,83 @@ export async function saveServerToken(options = {}) {
     return { dryRun: true, path: resolveServerTokenFilePath(), tokenLength: token.length, companyId, userId, company };
   }
   const path = await writeServerSession({ token, companyId, userId, company });
-  return { saved: true, path, tokenLength: token.length, companyId, userId, company, nickname: probe.nickname };
+  // tokenRefresh exchanges the token for one that carries an explicit expiry.
+  // Without it the cache could only rely on the JWT exp claim.
+  const refreshed = await refreshServerSession({ ...options, token, verify: false });
+  return {
+    saved: true,
+    path,
+    tokenLength: token.length,
+    companyId,
+    userId,
+    company,
+    nickname: probe.nickname,
+    refreshed: refreshed.refreshed,
+    expiresAt: refreshed.expiresAt,
+    refreshReason: refreshed.refreshed ? undefined : refreshed.reason,
+  };
 }
 
 export async function ensureServerToken(options = {}) {
-  const cached = await readServerToken();
-  if (!cached) {
+  const status = await serverSessionStatus(options);
+  if (!status.present) {
     return { usable: false, cached: false, needsNewToken: true, reason: "no server token is stored" };
   }
-  const probe = await probeServerToken(cached, options);
-  if (probe.usable) {
-    return { usable: true, cached: true, source: process.env.YUNLOGIN_SERVER_TOKEN ? "environment" : "cache", userId: probe.userId, identity: await readServerIdentity() };
+
+  let refreshed = false;
+  let refreshNote;
+  if (status.dueForRefresh || options.forceRefresh) {
+    const result = await refreshServerSession({ ...options, token: await readServerToken() });
+    refreshed = result.refreshed;
+    if (!result.refreshed) refreshNote = result.reason;
   }
+
+  const probe = await probeServerToken(await readServerToken(), options);
+  if (probe.usable) {
+    const latest = await serverSessionStatus(options);
+    return {
+      usable: true,
+      cached: true,
+      refreshed,
+      refreshNote,
+      source: process.env.YUNLOGIN_SERVER_TOKEN ? "environment" : "cache",
+      userId: probe.userId,
+      identity: await readServerIdentity(),
+      expiresAt: latest.expiresAt,
+      expiresAtMs: latest.expiresAtMs,
+      remainingMs: latest.remainingMs,
+      dueForRefresh: latest.dueForRefresh,
+      skewMs: latest.skewMs,
+    };
+  }
+
+  // A rejected token still gets one refresh attempt before we drop it.
+  if (!refreshed) {
+    const retry = await refreshServerSession({ ...options, token: await readServerToken() });
+    if (retry.refreshed) {
+      const second = await probeServerToken(await readServerToken(), options);
+      if (second.usable) {
+        const latest = await serverSessionStatus(options);
+        return {
+          usable: true,
+          cached: true,
+          refreshed: true,
+          source: "cache",
+          userId: second.userId,
+          identity: await readServerIdentity(),
+          expiresAt: latest.expiresAt,
+          expiresAtMs: latest.expiresAtMs,
+          remainingMs: latest.remainingMs,
+          dueForRefresh: latest.dueForRefresh,
+          skewMs: latest.skewMs,
+        };
+      }
+      refreshNote = "the refreshed token was rejected as well";
+    } else {
+      refreshNote = retry.reason;
+    }
+  }
+
   if (!options.dryRun) await clearServerToken();
   return {
     usable: false,
@@ -276,6 +348,7 @@ export async function ensureServerToken(options = {}) {
     needsNewToken: true,
     cleared: !options.dryRun,
     reason: `the server rejected the stored token: HTTP ${probe.httpStatus}, code=${probe.code}, msg=${probe.msg ?? ""}`,
+    refreshAttempt: refreshNote ?? "not attempted",
     hint: "Export a fresh token and run: node scripts/yunlogin-auth.mjs save-server-token",
   };
 }
@@ -322,6 +395,7 @@ async function main() {
     const localToken = await readLocalToken();
     const local = localToken ? await probeLocalToken(localToken, context) : { usable: false, reason: "no local token is stored" };
     const server = await ensureServerToken({ ...context, dryRun: true });
+    const serverStatus = await serverSessionStatus(context);
     console.log(JSON.stringify({
       command: "status",
       local: {
@@ -333,6 +407,12 @@ async function main() {
       server: {
         stored: Boolean(await readServerToken()),
         path: resolveServerTokenFilePath(),
+        expiresAt: serverStatus.expiresAt,
+        expiresAtMs: serverStatus.expiresAtMs,
+        remainingMs: serverStatus.remainingMs,
+        dueForRefresh: serverStatus.dueForRefresh,
+        skewMs: serverStatus.skewMs,
+        refreshedAt: serverStatus.refreshedAt,
         ...server,
       },
     }, null, 2));
@@ -346,6 +426,27 @@ async function main() {
 
   if (command === "ensure-server") {
     console.log(JSON.stringify({ command, ...(await ensureServerToken(context)) }, null, 2));
+    return;
+  }
+
+  if (command === "refresh-server-token") {
+    const status = await serverSessionStatus(context);
+    if (!status.present) {
+      console.log(JSON.stringify({ command, refreshed: false, needsNewToken: true, reason: "no server token is stored" }, null, 2));
+      process.exitCode = 2;
+      return;
+    }
+    const result = await refreshServerSession({ ...context, token: await readServerToken() });
+    const after = await serverSessionStatus(context);
+    console.log(JSON.stringify({
+      command,
+      ...result,
+      expiresAtMs: after.expiresAtMs,
+      remainingMs: after.remainingMs,
+      dueForRefresh: after.dueForRefresh,
+      skewMs: after.skewMs,
+    }, null, 2));
+    if (!result.refreshed) process.exitCode = 1;
     return;
   }
 
