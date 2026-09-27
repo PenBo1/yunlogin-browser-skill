@@ -903,7 +903,21 @@ async function main() {
 
   if (command === "tag-create") {
     const name = normalizeName(options.name, { label: "name" });
-    console.log(JSON.stringify({ command: "tag-create", name, color: describeTagColor(options.color), ...(await upsertTag(name, options)) }, null, 2));
+    const result = await upsertTag(name, options);
+    // The upsert route does not echo the identifier, so resolve it here instead
+    // of making the caller list the tags again to find the new one.
+    const resolved = options.dryRun
+      ? undefined
+      : (options.labelId
+          ? (await listTags()).find((tag) => tag.labelId === options.labelId)
+          : (await listTags()).find((tag) => tag.name === name));
+    console.log(JSON.stringify({
+      command: "tag-create",
+      name,
+      color: describeTagColor(options.color),
+      ...result,
+      labelId: resolved?.labelId,
+    }, null, 2));
     return;
   }
 

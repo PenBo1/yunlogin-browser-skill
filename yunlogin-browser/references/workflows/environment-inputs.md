@@ -185,3 +185,4 @@ returned zero matches.
 | The list shows "proxy deleted" | The proxy block was empty. Send the direct-connection block or a resolved stored proxy. |
 | The environment landed in the default group | The local route was given a top-level `groupid`, which it ignores. Send `accounts.groupid`. |
 | Tags are missing after a create | The create fell back to the local route, which has no tag field. Create with `--transport server` when tags matter. |
+| A cleared remark comes back | The local update route ignores an empty value, and the server route replaces the whole configuration. See the remarks section in [environment-lifecycle.md](./environment-lifecycle.md). |

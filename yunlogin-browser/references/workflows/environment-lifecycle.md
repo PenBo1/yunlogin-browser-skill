@@ -180,6 +180,38 @@ requested, the result carries `skippedAttributes` naming the tags and the reason
 and `appliedAttributes` leaves the tags out rather than reporting them as done.
 Create with `--transport server` when tags matter.
 
+### Remarks
+
+The remark is a field on the environment, not a resource of its own, so it has no
+create or delete route.
+
+| Operation | Route | Behaviour |
+| --- | --- | --- |
+| Read | `POST /v2/newbrowser/getconditionshops` (`notes`) or `getfingerprinturi` (`browseinfo.notes`) | Returns the stored remark. |
+| Set on create | `putalluri` or the local `user/create` | Stored and read back. |
+| Change to a new value | local `POST /api/v2/userapi/user/update` with `browser[].notes` | Applied. This route patches only the fields it receives, so the fingerprint, proxy, and account bindings are preserved. |
+| Clear to empty | none | Not supported non-destructively. |
+
+Clearing needs its own explanation, because both routes fail in a way that is
+easy to misread as success:
+
+- The local update route ignores an empty value. `notes: ""`, `notes: null`, and
+  an omitted `notes` all return `code: 0` and leave the previous remark in place.
+  A single space is applied, which is the only non-destructive way to make the
+  remark look empty.
+- The server route does store an empty remark, but it replaces the whole
+  configuration with the body you send. A body that carries only the name, the
+  id, and the remark was accepted with `code: 200` and then reported
+  `kernelId: 0` with an empty proxy block on the next read.
+
+Choose deliberately:
+
+| Goal | Do this |
+| --- | --- |
+| A different remark | Local `user/update` with `browser[].notes`, or re-run `create` for a new environment. |
+| A visually blank remark | Local `user/update` with `browser[].notes` set to a single space. |
+| A genuinely empty remark | Use the server `putalluri` with the complete configuration, and accept that the fingerprint block is rewritten. Deleting the environment also removes the remark. |
+
 ## Deletion Requires Confirmation
 
 Every destructive command stops with exit code 2 and a `needsConfirmation` payload unless the matching confirmation flag is present:

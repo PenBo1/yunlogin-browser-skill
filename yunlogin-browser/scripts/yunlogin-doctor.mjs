@@ -233,6 +233,22 @@ async function checkBehaviour() {
     acceptDefaults.status === 0 ? "the documented default path still plans a body" : acceptDefaults.stderr.trim().slice(0, 120),
   ]);
 
+  const groupDryRun = runNode("scripts/yunlogin-env.mjs", ["group-create", "--name", "doctor-dry-group", "--dry-run"]);
+  const groupDryPayload = parseTrailingJson(groupDryRun.stdout);
+  checks.push([
+    "group create dry-run",
+    groupDryRun.status === 0 && groupDryPayload?.dryRun === true,
+    groupDryRun.status === 0 ? "plans a group without sending it" : groupDryRun.stderr.trim().slice(0, 120),
+  ]);
+
+  const tagDryRun = runNode("scripts/yunlogin-env.mjs", ["tag-create", "--name", "doctor-dry-tag", "--dry-run"]);
+  const tagDryPayload = parseTrailingJson(tagDryRun.stdout);
+  checks.push([
+    "tag create dry-run",
+    tagDryRun.status === 0 && tagDryPayload?.dryRun === true,
+    tagDryRun.status === 0 ? "plans a tag without the id lookup" : tagDryRun.stderr.trim().slice(0, 120),
+  ]);
+
   const cdpUsage = runNode("scripts/yunlogin-cdp.mjs", []);
   checks.push(["cdp usage guard", cdpUsage.status !== 0 && /Usage:/i.test(cdpUsage.stderr), `exit ${cdpUsage.status}`]);
 

@@ -18,9 +18,10 @@ non-zero when any check fails.
 | behaviour | Each helper CLI runs and keeps its guards: dry-run works, unknown endpoint ids are refused, and mutations still require their confirmation flags. |
 | token-refresh wiring | The catalog resolves the refresh route, and a server read refreshes the session first when the remaining lifetime is inside the skew window. |
 | attribute question | `create` with no attribute flag exits 2 with `needsAttributes`, offers the real group names, and creates nothing. |
+| create paths | The group and tag dry runs plan a request without sending it or performing the tag id lookup. |
 | `--live` | The loopback API, the port 52446 client service, the cached server session, one cataloged server read, and the proactive refresh path answer correctly. |
 
-Result on 2026-09-27: 17 offline checks and 6 live checks passed.
+Result on 2026-09-27: 19 offline checks and 6 live checks passed.
 
 ## Local API
 
@@ -122,6 +123,24 @@ map.
 | The same create with a top-level `browser[].groupid` | Accepted with `code: 0` and ignored; the environment landed in the default group. |
 | `create --transport local --label <name>` | The local route has no tag field, so the result reported `skippedAttributes` for the tag and `appliedAttributes` omitted it. |
 | Temporary environments used for these checks | Deleted; a follow-up `getconditionshops` returned zero matches. |
+
+### Group, Tag, And Remark Interfaces
+
+Exercised live on 2026-09-27. Every temporary group and tag was deleted and a
+follow-up list confirmed it was gone.
+
+| Check | Result |
+| --- | --- |
+| Group list | `getgroups` returned 86 groups with `groupId`, `name`, and `systemGroup`. |
+| Group create, rename, delete | Created, found in the list, renamed in place, deleted with `code: 200`, absent from the next list. |
+| Group delete without `--confirm-delete` | Exit code 2 with `needsConfirmation` on stderr; nothing was deleted. |
+| Tag list | `findTags` returned 69 tags with `labelId`, `name`, `color`, and `colorName`. |
+| Tag create, rename, delete | Created with colour `teal`, found in the list, renamed in place, deleted with `code: 200`, absent from the next list. |
+| `tag-create` result | Returns the new `labelId` directly, so a caller no longer has to list the tags again to find it. |
+| Tag delete without `--confirm-delete` | Exit code 2 with `needsConfirmation` on stderr. |
+| Remark read and change | Created with a remark, read it back, changed it through the local `user/update`, and read the new value. |
+| Remark cleared with `notes: ""`, `notes: null`, or an omitted `notes` | `code: 0` and the previous remark stayed, so the local route cannot clear it. |
+| Remark cleared through the server route with a minimal body | The remark was stored empty, and the next read showed `kernelId: 0` with an empty proxy block. |
 
 ## CDP and Playwright CLI
 
