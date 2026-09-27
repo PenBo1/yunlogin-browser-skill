@@ -52,6 +52,34 @@ node scripts/yunlogin-env.mjs bootstrap-token --create-if-missing
 
 Rules: control characters become spaces, unsupported characters become a dash, runs of spaces, underscores, and dashes collapse to a single dash, leading and trailing dashes and dots are removed, and the result is capped at 32 characters. Keep names short and readable, and put detail in the remark. Letters and digits from any script are preserved, so Chinese, Japanese, and Korean names survive unchanged. Group and tag names use the same rules.
 
+## Proxy Configuration
+
+`create` builds the environment from the server template, but that template's proxy block is an empty skeleton. Submitting it verbatim produces an environment the management center lists as **proxy deleted**, even though the create call returned `code: 200`.
+
+The helper now sends the direct-connection template, so a new environment runs without a proxy and reports `device_type: local`:
+
+```json
+{
+  "dns": { "mode": false, "inside": true },
+  "deviceType": "local",
+  "inlie": "local",
+  "region": "random-random-random",
+  "ipChannel": "ipinfo",
+  "randEnv": false,
+  "proxyaddrArr": null
+}
+```
+
+Confirm the result with `browser-list`:
+
+| Symptom | Meaning |
+| --- | --- |
+| `device_type`, `inlie`, `region`, and `ipChannel` are empty strings | The proxy block was stored blank; the list shows "proxy deleted". |
+| `device_type: local`, `inlie: local`, `region: random-random-random`, `ipChannel: ipinfo` | Healthy direct connection. |
+| `proxyip` empty right after creation | Normal for the first seconds; the server detects the egress IP asynchronously. |
+
+To attach a stored proxy later, resolve it with `proxy-self-list` or `proxy-cloud-list` and set `type` and `uuid` in the proxy block. Pass a complete `browser` object with `--template-file` when you need a proxy binding the helper does not build itself.
+
 ## Notes, Tags, And Groups
 
 An environment template carries three presentation attributes:
@@ -154,6 +182,8 @@ An environment the helper did not create is never deleted.
 | `updateTag` then `delTag` | `code: 200` both ways; the tag disappeared from `findTags` |
 | `POST /api/v1/client/clean_env` on port 52446 | `code: 0`, `msg: Success` |
 | `bootstrap-token` against an existing environment | Reused the environment and deleted nothing |
+| Create with the direct-connection proxy block | `device_type: local`, `inlie: local`, `region: random-random-random`, `ipChannel: ipinfo`, and a detected `proxyip` |
+| Create with the empty template proxy block | Proxy fields are stored blank and the list shows "proxy deleted" |
 | `bootstrap-token` with no matching environment and no confirmation | Exit code 2 with a `needsConfirmation` payload and the planned name and remark |
 | `bootstrap-token --confirm-create` | Created `skill-temp-<kernel>-<MMDD>-<HHmm>`, captured a verified token, deleted it through the server route, and left zero environments behind |
 | `bootstrap-token --reuse-only` | Failed with a clear message instead of creating anything |

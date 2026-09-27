@@ -289,6 +289,20 @@ const tagColorsSource = await readFile(path.join(scriptsDir, "lib", "tag-colors.
 assert(tagColorsSource.includes("resolveTagColor"), "tag-colors.mjs must validate colour input");
 const envHelperSource = await readFile(path.join(scriptsDir, "yunlogin-env.mjs"), "utf8");
 assert(envHelperSource.includes("resolveTagColor"), "yunlogin-env.mjs must validate the tag colour");
+
+// The creation payload must carry a concrete proxy block, otherwise the server
+// stores an empty one and the environment is listed as "proxy deleted".
+assert(envHelperSource.includes("deviceType: \"local\""), "yunlogin-env.mjs must send a concrete proxy deviceType");
+assert(envHelperSource.includes("inlie: \"local\""), "yunlogin-env.mjs must send a concrete proxy inlie");
+assert(envHelperSource.includes("region: \"random-random-random\""), "yunlogin-env.mjs must send a concrete proxy region");
+assert(envHelperSource.includes("ipChannel: \"ipinfo\""), "yunlogin-env.mjs must send a concrete proxy ipChannel");
+assert(envHelperSource.includes('cookie: "[]"'), "yunlogin-env.mjs must send a valid accounts cookie value");
+const createDoc = await readFile(path.join(serverDir, "endpoints", "environment-create.md"), "utf8");
+assert(createDoc.includes("proxy deleted"), "environment-create.md must warn about the proxy-deleted symptom");
+assert(createDoc.includes("deviceType"), "environment-create.md must document the proxy block");
+const lifecycleDoc = await readFile(path.join(skillDir, "references", "workflows", "environment-lifecycle.md"), "utf8");
+assert(lifecycleDoc.includes("Proxy Configuration"), "Environment lifecycle guide must document proxy configuration");
+assert(lifecycleDoc.includes("random-random-random"), "Environment lifecycle guide must show the direct proxy template");
 assert(skillSource.includes("tag-colors.md"), "SKILL.md must link the tag colour guide");
 assert(lifecycleGuide.includes("putdeleteshop"), "Environment lifecycle guide must document the server delete route");
 assert(lifecycleGuide.includes("confirm-attributes"), "Environment lifecycle guide must document attribute confirmation");

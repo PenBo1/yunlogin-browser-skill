@@ -582,6 +582,29 @@ async function localGpuInfo() {
   }
 }
 
+// getfingerprinturi returns an empty proxy skeleton. Submitting it verbatim
+// leaves deviceType, inlie, region and ipChannel empty, and the environment is
+// then listed as "proxy deleted". Send the direct-connection template instead.
+const LOCAL_PROXY_BLOCK = {
+  dns: { mode: false, inside: true },
+  deviceType: "local",
+  inlie: "local",
+  region: "random-random-random",
+  ipChannel: "ipinfo",
+  randEnv: false,
+  proxyaddrArr: null,
+};
+
+export function buildLocalProxyBlock() {
+  return { ...LOCAL_PROXY_BLOCK, dns: { ...LOCAL_PROXY_BLOCK.dns } };
+}
+
+// The cookie field must be a cookie object or the "[]" string, and url must be
+// an array. The template ships empty values that the server rejects.
+export function buildAccountsBlock() {
+  return { url: [], cookie: "[]" };
+}
+
 export async function buildServerCreateBody(options) {
   const name = normalizeEnvironmentName(options.name);
   const attributes = options.attributes ?? {};
@@ -593,6 +616,8 @@ export async function buildServerCreateBody(options) {
       browser: {
         ...browser,
         name,
+        proxy: attributes.proxy ?? browser.proxy ?? buildLocalProxyBlock(),
+        accounts: attributes.accounts ?? buildAccountsBlock(),
         ...(attributes.notes !== undefined ? { notes: attributes.notes } : {}),
         ...(attributes.groupId ? { categoryid: attributes.groupId } : {}),
         ...(attributes.labelIds ? { labelid: attributes.labelIds } : {}),
@@ -617,11 +642,15 @@ export async function buildServerCreateBody(options) {
   return {
     number: options.number ?? 1, randProxy: 0, batch_platform_id: "", batch_custom_id: "", batchProxy: [],
     browser: {
-      ...browseinfo,
       name,
       notes: attributes.notes ?? browseinfo.notes ?? "",
       labelid: attributes.labelIds ?? [],
+      is_star_tag: browseinfo.is_star_tag ?? 0,
+      shopid: "",
       categoryid: attributes.groupId ?? browseinfo.categoryid ?? "",
+      top_order: browseinfo.top_order ?? 0,
+      proxy: attributes.proxy ?? buildLocalProxyBlock(),
+      accounts: attributes.accounts ?? buildAccountsBlock(),
       fingerprint: buildFingerprintBlock({ system, kernel, kernelVersion, defaults: defaultsResponse.payload, gpu }),
     },
   };
