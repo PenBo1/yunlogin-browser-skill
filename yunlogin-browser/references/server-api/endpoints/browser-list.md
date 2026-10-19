@@ -92,10 +92,10 @@ node scripts/yunlogin-server-api.mjs browser-list --body-file request.json
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `allshopnumb` | number | Total number of matching environments. |
+| `allshopnumb` | number | Total for the current query, independent of the `number`/`offer` window. |
 | `code` | number | Business status code. `200` means success. |
 | `msg` | string | Business message. |
-| `shop` | array | Browser environment list. |
+| `shop` | array or null | Browser environment list. A query that matches nothing returns `null`, not `[]`, so treat a missing `shop` as an empty list. |
 
 ### `shop[]` Fields
 
@@ -107,13 +107,13 @@ node scripts/yunlogin-server-api.mjs browser-list --body-file request.json
 | `url` | string | Environment URL. |
 | `platformid` | string | Platform ID. |
 | `company_id` | string | Company ID. |
-| `group` | object | Group information: `name`, `groupid`. |
+| `group` | object | Group information: `name`, `groupid`. The object can be absent or carry a blank name for an ungrouped environment (108 of 3515 rows in one measured snapshot), so group an empty value under an explicit bucket instead of dropping the row. |
 | `name` | string | Environment name. |
 | `accounts` | string | Account association value. |
 | `proxyip` | string | Proxy IP. |
 | `Country` | string | Proxy country. |
 | `City` | string | Proxy city. |
-| `dynamic` | number | Dynamic proxy indicator. |
+| `dynamic` | number | Dynamic proxy indicator. Observed as the constant `2` on every row, including rows with no proxy, so it cannot be used to detect proxy assignment. |
 | `notes` | string | Notes. |
 | `isstartag` | number | Star/favorite state. |
 | `topOrder` | number | Top ordering value. |
@@ -144,7 +144,7 @@ node scripts/yunlogin-server-api.mjs browser-list --body-file request.json
 | `kernel` | string | Browser kernel. |
 | `ipChannel` | string | IP detection channel. |
 | `inspect` | number | Inspection state. |
-| `proxy` | object | Proxy details. Contains `name`, `inlie`, `uuid`, `type`, `product`, `PublicIP`, `ipChannel`, `deviceType`, `randEnv`, `proxyaddrArr`, `region`, `dns`, `socks5`, `http`, `https`, `ssh`, `v2Ray`, `zhima`, and `dynamic` fields. |
+| `proxy` | object | Proxy details. **Always present**: an unassigned proxy is this object with empty defaults, not `null`, so detect an unassigned proxy with `proxyip`, `proxyId`, or `proxy.name`. Contains `name`, `inlie`, `uuid`, `type`, `product`, `PublicIP`, `ipChannel`, `deviceType`, `randEnv`, `proxyaddrArr`, `region`, `dns`, `socks5`, `http`, `https`, `ssh`, `v2Ray`, `zhima`, and `dynamic` fields. |
 | `userPasswordIds` | string | Associated account IDs. |
 | `proxyEndTime` | string | Proxy expiration time. |
 | `passwords` | array | Associated account/password records. |
@@ -208,3 +208,21 @@ Failures arrive as HTTP 200 with a non-200 business code. Read [ERRORS.md](../ER
 ## Notes
 
 The actual response can contain account, proxy, and environment identifiers. The helper redacts `cdk`, proxy usernames/passwords, and common credential fields by default. Use `--show-sensitive` only when the user explicitly requests raw values and the output destination is safe.
+
+
+Pagination is `number` (limit) + `offer` (offset): verified `number:5` with `offer:0/5/10` returns three successive pages, and `number:0` returns 0 rows while `allshopnumb` keeps reporting the query total. `page`/`pageSize`/`pageIndex` are ignored. See PARAMETER_MATRIX.md batch 34.
+
+Working with the full set:
+
+- **Count per group from this route.** `server-group-list` returns group definitions only, with no member count, so the per-group totals come from counting `shop[].group.name` here.
+- **`allshopnumb` is the total for the current query and does not shrink with the `number`/`offer` window** (verified: `number:0` returned 0 rows while `allshopnumb` still reported the query total), so compare the rows you collected against it to prove nothing was dropped. With no filter applied it equals the whole-account total.
+- **Deduplicate by `shopid`.** Offsets are resolved per request, so a list that changes between pages can repeat or skip a row. Collecting by `shopid` made a full paged walk return exactly `allshopnumb` unique ids.
+- **`enable` does not filter on this account.** `enable: 0` and `enable: 1` both return the full set, so treat the result as all environments unless another documented filter narrows it.
+
+**Additional accepted request fields** (recognised by the decoder but not in the minimal tested body; see PARAMETER_MATRIX.md batch 32): `page, pageSize, name`.
+
+## See Also
+
+- [RESPONSE_SHAPES.md](../RESPONSE_SHAPES.md) - envelope, key-name, and type traps across the surface.
+- [WRITE_ROUNDTRIPS.md](../WRITE_ROUNDTRIPS.md) - verified write round trips and silent-failure notes.
+- [ERRORS.md](../ERRORS.md) - HTTP vs business code contract.

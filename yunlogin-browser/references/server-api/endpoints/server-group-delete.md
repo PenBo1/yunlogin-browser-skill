@@ -82,3 +82,9 @@ Failures arrive as HTTP 200 with a non-200 business code. Read [ERRORS.md](../ER
 ## Notes
 
 Verify the removal with `server-group-list` after the call.
+
+## See Also
+
+- [RESPONSE_SHAPES.md](../RESPONSE_SHAPES.md) - envelope, key-name, and type traps across the surface.
+- [WRITE_ROUNDTRIPS.md](../WRITE_ROUNDTRIPS.md) - verified write round trips and silent-failure notes.
+- [ERRORS.md](../ERRORS.md) - HTTP vs business code contract.

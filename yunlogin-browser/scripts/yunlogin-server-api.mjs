@@ -4,13 +4,14 @@
  * Safe command-line client for the cataloged YunLogin management-center API.
  *
  * The helper resolves an endpoint ID from references/server-api/endpoints.json,
- * reads the bearer token from the environment, validates the request, and
+ * synchronizes the current Workbench bearer, validates the request, and
  * optionally sends the request. Unknown endpoints are never sent.
  */
 
 import { readFile } from "node:fs/promises";
 import { readServerIdentity, readServerToken } from "./lib/local-token-store.mjs";
-import { ensureFreshServerSession } from "./lib/server-token.mjs";
+import { assertWorkbenchIdentity, syncWorkbench } from "./lib/workbench-session.mjs";
+import { readWorkbenchSession } from "./lib/workbench-cache.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -33,26 +34,20 @@ Options:
   --dry-run              Validate and print the request without sending it
   --list                 List cataloged endpoint IDs without networking
   --show-sensitive       Disable response-field redaction
+
+Public endpoints marked requires_auth:false do not require a server token.
   -h, --help             Show this help
 
 Environment:
-  YUNLOGIN_SERVER_TOKEN       Bearer token override
-  YUNLOGIN_SERVER_TOKEN_FILE  Server token cache path override
-
-The bearer token is read from YUNLOGIN_SERVER_TOKEN first and from the
-user-level cache next (%LOCALAPPDATA%\yunlogin-browser\server-token.json).
-Store or refresh the session with:
-  node scripts/yunlogin-auth.mjs save-server-token
-  node scripts/yunlogin-auth.mjs ensure-server
-  YUNLOGIN_SERVER_COOKIE      Optional Cookie header
+  Authenticated calls synchronize the active Workbench session first.
+  node scripts/yunlogin-auth.mjs sync-workbench
   YUNLOGIN_SERVER_LANG        Optional Lang header (default: zh)
-  YUNLOGIN_SERVER_COMPANY_ID  Optional companyid default
-  YUNLOGIN_SERVER_USER_ID     Optional userid default
   YUNLOGIN_TIMEOUT_MS         Request timeout in milliseconds (default: 30000)
 
 Examples:
   node scripts/yunlogin-server-api.mjs browser-list --dry-run
   node scripts/yunlogin-server-api.mjs browser-list --body-file request.json
+  node scripts/yunlogin-server-api.mjs sso-login --body-file login.json --dry-run
   node scripts/yunlogin-server-api.mjs proxy-cloud-list --query status=0 --dry-run
   node scripts/yunlogin-server-api.mjs --list`);
 }
@@ -242,20 +237,20 @@ function resolveOrigin(catalog) {
   return parsed.origin;
 }
 
-async function buildHeaders(method) {
-  const token = await readServerToken();
-  if (!token) {
-    throw new Error("No server token is available. Set YUNLOGIN_SERVER_TOKEN or run node scripts/yunlogin-auth.mjs save-server-token");
-  }
+async function buildHeaders(endpoint, dryRun = false) {
   const headers = new Headers({
     accept: "application/json, text/plain, */*",
-    authorization: `Bearer ${token}`,
     lang: process.env.YUNLOGIN_SERVER_LANG ?? "zh",
   });
-  if (method !== "GET") headers.set("content-type", "application/json");
-  if (process.env.YUNLOGIN_SERVER_COOKIE) {
-    headers.set("cookie", process.env.YUNLOGIN_SERVER_COOKIE);
+  for (const [name, value] of Object.entries(endpoint.header_defaults ?? {})) {
+    headers.set(name, String(value));
   }
+  if (endpoint.requires_auth !== false) {
+    const token = dryRun ? "[WORKBENCH_SESSION]" : await readServerToken();
+    if (!token) throw new Error("No verified Workbench session is available. Run yunlogin-auth.mjs sync-workbench.");
+    headers.set("authorization", token);
+  }
+  if (endpoint.method !== "GET") headers.set("content-type", "application/json");
   return headers;
 }
 
@@ -280,7 +275,7 @@ function headersForDisplay(headers) {
   return Object.fromEntries(
     [...headers.entries()].map(([name, value]) => [
       name,
-      name === "authorization" || name === "cookie" ? "[SET]" : value,
+      name === "authorization" || name === "cookie" || name === "appinfo" ? "[SET]" : value,
     ]),
   );
 }
@@ -309,34 +304,36 @@ async function main() {
     return;
   }
   const endpoint = findEndpoint(catalog, options.endpointId);
+  if (endpoint.id === "token-refresh") throw new Error("Independent token refresh is disabled in Workbench mode; renew in Workbench and run sync-workbench.");
+  if (endpoint.id === "sso-login" && !options.dryRun) throw new Error("Independent login is disabled in Workbench mode. Sign in through Workbench.");
+  const requiresAuth = endpoint.requires_auth !== false;
   const origin = resolveOrigin(catalog);
+  if (requiresAuth && !options.dryRun) await syncWorkbench();
 
   const body = endpoint.method === "GET" ? {} : mergeBody(endpoint, await readBody(options));
   const query = mergeQuery(endpoint, options.query);
   await applyEnvironmentDefaults(endpoint, query, body);
+  if (requiresAuth && !options.dryRun) {
+    const selected = await readWorkbenchSession();
+    for (const values of [query, body]) for (const [name, value] of Object.entries(values)) {
+      const expected = /^(companyid|company_id)$/i.test(name) ? selected?.companyId : /^(userid|user_id)$/i.test(name) ? selected?.userId : undefined;
+      if (expected !== undefined && value !== "" && String(value) !== expected) throw new Error(`${name} differs from the currently selected Workbench account; the request was stopped.`);
+    }
+  }
 
   if (endpoint.method === "GET" && (options.bodyText !== undefined || options.bodyFile !== undefined)) {
     throw new Error("GET endpoints do not accept a request body");
   }
-  validateRequired(endpoint.query_required, query, "query");
-  validateRequired(endpoint.body_required, body, "body");
+  if (!options.dryRun || !requiresAuth) {
+    validateRequired(endpoint.query_required, query, "query");
+    validateRequired(endpoint.body_required, body, "body");
+  }
 
   const url = new URL(endpoint.path, origin);
   for (const [name, value] of Object.entries(query)) {
     if (value !== undefined && value !== null) url.searchParams.set(name, String(value));
   }
-// Keep the cached session warm before the call. A refresh failure must not
-  // block the request: the response below reports the real server answer.
-  try {
-    const session = await ensureFreshServerSession({ verify: false });
-    if (session.refreshed) {
-      console.error(`Refreshed the server token; it now expires at ${session.expiresAt ?? "an unknown time"}.`);
-    }
-  } catch {
-    // The cached token may still be usable, so continue and let the call decide.
-  }
-
-  const headers = await buildHeaders(endpoint.method);
+  const headers = await buildHeaders(endpoint, options.dryRun);
   const requestBody = endpoint.method === "GET" ? undefined : JSON.stringify(body);
   const timeoutMs = Number.parseInt(process.env.YUNLOGIN_TIMEOUT_MS ?? "30000", 10);
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
@@ -351,6 +348,8 @@ async function main() {
           endpoint: endpoint.id,
           method: endpoint.method,
           url: url.href,
+          requiresAuth,
+          identity: requiresAuth ? "resolved from current Workbench on live execution" : "not required",
           headers: headersForDisplay(headers),
           body: requestBody === undefined ? { type: "none" } : { type: "json", value: redact(body, "", endpoint.redact_keys ?? []) },
         },
@@ -362,6 +361,7 @@ async function main() {
   }
 
   async function send(requestHeaders) {
+    if (requiresAuth && endpoint.method !== "GET") await assertWorkbenchIdentity(await readWorkbenchSession());
     const response = await fetch(url, {
       method: endpoint.method,
       headers: requestHeaders,
@@ -374,14 +374,7 @@ async function main() {
 
   let { response, responseText, parsed } = await send(headers);
 
-  // A rejected bearer token is the one failure the helper can repair itself.
-  if (parsed?.code === 1001) {
-    const refreshed = await ensureFreshServerSession({ force: true, verify: false }).catch(() => ({ refreshed: false }));
-    if (refreshed.refreshed) {
-      console.error("The bearer token was rejected; refreshed the session and retrying once.");
-      ({ response, responseText, parsed } = await send(await buildHeaders(endpoint.method)));
-    }
-  }
+  if (requiresAuth && parsed?.code === 1001) throw new Error("Workbench token was rejected. Sign in again in Workbench and retry after synchronizing.");
 
   console.error(`${response.status} ${response.statusText}`);
   if (parsed === undefined) {

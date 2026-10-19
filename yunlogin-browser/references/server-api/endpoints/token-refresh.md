@@ -105,3 +105,9 @@ A rejected token cannot be replaced by this route: the route needs a usable toke
 - `scripts/yunlogin-server-api.mjs` and `scripts/yunlogin-env.mjs` refresh before a call when the cached token is due, and retry the call once when a response returns `code: 1001`.
 - The refresh window defaults to 24 hours and can be changed with `YUNLOGIN_SERVER_REFRESH_SKEW_MS`. Setting it larger than the token lifetime forces a refresh before every call.
 - The replacement token and its expiry are written to the user-level `server-token.json`. Never write them into the skill, a log, or a response. Storage rules are in [token-lifecycle.md](../../workflows/token-lifecycle.md).
+
+## See Also
+
+- [RESPONSE_SHAPES.md](../RESPONSE_SHAPES.md) - envelope, key-name, and type traps across the surface.
+- [WRITE_ROUNDTRIPS.md](../WRITE_ROUNDTRIPS.md) - verified write round trips and silent-failure notes.
+- [ERRORS.md](../ERRORS.md) - HTTP vs business code contract.

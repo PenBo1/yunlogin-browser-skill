@@ -68,3 +68,8 @@ Failure
     "msg": "fail message"
 }
 ```
+
+> Measured on the server origin 2026-10-10: the "an empty value means no change" note above does not
+> hold. A body with only `deviceid`, `name` and `notes` answers `code: -2 failed update`, so `proxytype`
+> and `proxyaddr` must be sent; and omitting an optional field clears it instead of leaving it
+> unchanged. See [../server-api/USERAPI_SURFACE.md](../server-api/USERAPI_SURFACE.md).

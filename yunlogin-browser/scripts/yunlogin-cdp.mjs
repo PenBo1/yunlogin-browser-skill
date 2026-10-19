@@ -12,6 +12,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readLocalToken, resolveLocalTokenFilePath, writeLocalToken } from "./lib/local-token-store.mjs";
+import { syncWorkbench } from "./lib/workbench-session.mjs";
+import { readWorkbenchSession } from "./lib/workbench-cache.mjs";
 
 const DEFAULT_TIMEOUT_MS = 30000;
 const FORBIDDEN_APPEND_FLAGS = [
@@ -173,8 +175,10 @@ function parseArguments(argv) {
   return { command, options };
 }
 
-function normalizeLocalOrigin() {
-  const configured = process.env.YUNLOGIN_LOCAL_BASE_URL ?? process.env.YUNLOGIN_BASE_URL ?? "http://localhost:50213";
+async function normalizeLocalOrigin(dryRun = false) {
+  const verified = dryRun ? null : await readWorkbenchSession();
+  const configured = verified?.localOrigin ?? (dryRun ? "http://localhost:50213" : null);
+  if (!configured) throw new Error("No verified Workbench local API origin is available; run sync-workbench.");
   let parsed;
   try {
     parsed = new URL(configured);
@@ -220,7 +224,7 @@ export async function launchEnvironment(options) {
   const headless = normalizeHeadless(options.headless);
   const appendCmd = (options.appendCmds ?? []).join(" ").trim();
   if (appendCmd) validateAppendCmd(appendCmd, options.allowRiskyCmd);
-  const origin = normalizeLocalOrigin();
+  const origin = await normalizeLocalOrigin(options.dryRun);
   const url = new URL("/api/v2/browser/start", origin);
   const body = { account_id: options.accountId, headless };
   if (appendCmd) body.append_cmd = appendCmd;
@@ -233,7 +237,6 @@ export async function launchEnvironment(options) {
   const headers = { accept: "application/json", "content-type": "application/json" };
   const localToken = await readLocalToken();
   if (localToken) headers.authorization = `Bearer ${localToken}`;
-  if (process.env.YUNLOGIN_LOCAL_COOKIE) headers.cookie = process.env.YUNLOGIN_LOCAL_COOKIE;
   const response = await fetch(url, {
     method: "POST",
     headers,
@@ -306,7 +309,7 @@ async function normalizeCdpUrl(value) {
   return payload.webSocketDebuggerUrl;
 }
 
-class CdpClient {
+export class CdpClient {
   constructor(url, timeoutMs) {
     this.url = url;
     this.timeoutMs = timeoutMs;
@@ -353,6 +356,11 @@ class CdpClient {
       this.pending.set(id, { resolve, reject, timer });
       this.socket.send(JSON.stringify(message));
     });
+  }
+
+  sendNoWait(method, params = {}) {
+    const id = this.nextId++;
+    this.socket.send(JSON.stringify({ id, method, params }));
   }
 
   close() {
@@ -493,7 +501,6 @@ async function localRequest(origin, requestPath, options = {}) {
   const headers = { accept: "application/json" };
   if (options.body !== undefined) headers["content-type"] = "application/json";
   if (options.token) headers.authorization = `Bearer ${options.token}`;
-  if (process.env.YUNLOGIN_LOCAL_COOKIE) headers.cookie = process.env.YUNLOGIN_LOCAL_COOKIE;
   const url = new URL(requestPath, `${origin}/`);
   const response = await fetch(url, {
     method: options.method ?? "GET",
@@ -513,17 +520,8 @@ async function localRequest(origin, requestPath, options = {}) {
   return { status: response.status, ok: response.ok, payload, text };
 }
 
-// Control calls (status, start, stop) also work anonymously on a fresh
-// install. A stale cached token must not block bootstrap, so a rejected
-// credential is retried once without the Authorization header.
 async function controlRequest(origin, requestPath, options = {}) {
-  const token = await readLocalToken();
-  const authenticated = await localRequest(origin, requestPath, { ...options, token });
-  if (authenticated.ok) return authenticated;
-  if (token && (authenticated.status === 401 || authenticated.status === 403)) {
-    return localRequest(origin, requestPath, { ...options, token: undefined });
-  }
-  return authenticated;
+  return localRequest(origin, requestPath, options);
 }
 
 async function readExtensionStorageValue(client, extensionOrigin, key, sessionId) {
@@ -645,6 +643,7 @@ async function verifyLocalToken(origin, token, timeoutMs) {
 }
 
 export async function captureLocalToken(options) {
+  throw new Error("Independent environment-token capture is disabled in Workbench mode. Run sync-workbench.");
   if (!options.accountId) throw new Error("--account-id is required for capture-local-token");
   const extensionId = resolveExtensionId(options);
   const extensionOrigin = extensionOriginFor(extensionId);
@@ -652,7 +651,7 @@ export async function captureLocalToken(options) {
   const storageKey = options.key ?? DEFAULT_TOKEN_STORAGE_KEY;
   const headless = options.headless === undefined ? "1" : normalizeHeadless(options.headless);
   const timeoutMs = normalizeTimeout(options.timeoutMs);
-  const origin = normalizeLocalOrigin();
+  const origin = await normalizeLocalOrigin(options.dryRun);
   const cacheFile = options.cacheFile
     ? path.resolve(options.cacheFile)
     : resolveLocalTokenFilePath();
@@ -765,7 +764,8 @@ export async function captureLocalToken(options) {
 }
 
 export async function stopEnvironment(accountId, options = {}) {
-  const origin = normalizeLocalOrigin();
+  await syncWorkbench();
+  const origin = await normalizeLocalOrigin();
   const timeoutMs = options.timeoutMs ?? Number.parseInt(process.env.YUNLOGIN_TIMEOUT_MS ?? String(DEFAULT_TIMEOUT_MS), 10);
   const response = await controlRequest(
     origin,
@@ -777,6 +777,8 @@ export async function stopEnvironment(accountId, options = {}) {
 
 async function main() {
   const { command, options } = parseArguments(process.argv.slice(2));
+  if (command === "capture-local-token") throw new Error("Independent environment-token capture is disabled in Workbench mode. Use yunlogin-auth.mjs sync-workbench.");
+  if (command === "start" && !options.dryRun) await syncWorkbench();
   if (command === "start") return launchEnvironment(options);
   if (command === "check") return runCheck(options);
   if (command === "targets") return runTargets(options);

@@ -1,5 +1,7 @@
 # CDP Automation
 
+For Workbench browser automation, use `yunlogin-client.mjs status` to obtain the verified CDP URL, then attach Playwright CLI directly. Management API credentials are a separate concern; see [token-lifecycle.md](token-lifecycle.md). Environment-browser launch below has its own CDP endpoint.
+
 This guide covers local YunLogin browser launch, the returned CDP WebSocket URL, external CDP endpoints, and safe `append_cmd` usage.
 
 ## Launch and CDP Flow
@@ -29,47 +31,17 @@ The `start` command prints `cdpUrl`, `selenium`, `debuggingPort`, and `webdriver
 
 ## Local API Authentication
 
-Some YunLogin desktop builds require authentication for local user API calls. If `/status` works but other local endpoints return `invalid token`, capture the token from the bundled browser extension instead of asking the customer for it:
+The local API availability check is separate from Workbench management authentication. If a local endpoint requires its own token, report that requirement; do not inspect Workbench extensions as part of this workflow. To synchronize management-center credentials:
 
 ```powershell
-node scripts/yunlogin-cdp.mjs capture-local-token --account-id <account-id>
+node scripts/yunlogin-auth.mjs sync-workbench
 ```
 
-### Automatic Token Capture
-
-`capture-local-token` performs the whole bootstrap:
-
-1. Reuse a running environment through `GET /api/v2/browser/status`, otherwise start one headless through `POST /api/v2/browser/start`.
-2. Connect to `data.ws.puppeteer` and attach a CDP session.
-3. Read the `Authorization` key from the extension origin `localStorage` with `DOMStorage.getDOMStorageItems`. A normal `Runtime.evaluate` call cannot read another extension origin and fails with a security error, so the storage domain is required.
-4. Verify the value with a local user API read (`POST /api/v2/userapi/user/shopseriallist`).
-5. Write the verified token to the user-level cache and print only the cache path, the token length, and `verified: true`.
-
-Useful options:
-
-| Option | Purpose |
-| --- | --- |
-| `--account-id` | Environment used for the capture. Required. |
-| `--extension-id` | Override the bundled extension ID when the build ships a different extension. |
-| `--headless 0` | Run the capture environment headed, which older kernels need for extension storage. |
-| `--cache-file` | Write the token somewhere other than the default cache path. |
-| `--keep-open` | Leave the capture environment running. |
-
-The capture finishes with the environment closed, unless it reused an already running environment or `--keep-open` was passed.
-
-To confirm the stored local token still works before automating, run `node scripts/yunlogin-auth.mjs ensure-local`. It reuses the cached value when the local API accepts it and captures a new one when the API rejects it. When the account has no environment at all, the same flow can create a short-lived `skill-temp-<kernel>-<MMDD>-<HHmm>` environment after the user confirms, capture the token, and delete it again. Read [token-lifecycle.md](token-lifecycle.md) and [environment-lifecycle.md](environment-lifecycle.md) for the refresh rules, transport fallback, and authorization requirements.
+Before management API operations, run `node scripts/yunlogin-auth.mjs sync-workbench`. For browser automation, attach directly to the verified CDP URL; no credential synchronization is needed. Read [token-lifecycle.md](token-lifecycle.md) for the management session rules.
 
 ### Token Resolution And Privacy
 
-`YUNLOGIN_LOCAL_TOKEN` is sent as `Authorization: Bearer <token>`. `YUNLOGIN_LOCAL_COOKIE` is an optional extra Cookie header, and the local helper masks both headers in dry-run output.
-
-Local helpers resolve the token in this order:
-
-1. `YUNLOGIN_LOCAL_TOKEN`
-2. `YUNLOGIN_LOCAL_TOKEN_FILE`
-3. `%LOCALAPPDATA%\yunlogin-browser\local-token.json` on Windows, `~/.local/share/yunlogin-browser/local-token.json` on other platforms
-
-The captured extension token is a local desktop credential. It authenticates the loopback API only; it is rejected by the management-center server API, which needs `YUNLOGIN_SERVER_TOKEN`. Keep the token out of the skill, source files, Markdown, logs, and responses. The cache lives in the user profile so an updated skill package never carries a credential.
+The management-center page supplies the only credential synchronized by this skill. Legacy token environment variables and cache files do not override its current bearer. Browser CDP attachment does not require management token synchronization; see [playwright-cli.md](playwright-cli.md).
 ## External CDP URL
 
 The helper also accepts a CDP URL returned by another tool:
@@ -82,6 +54,59 @@ node scripts/yunlogin-cdp.mjs targets --cdp-url http://127.0.0.1:9222
 - `ws://` and `wss://` URLs are used directly.
 - `http://` and `https://` URLs are resolved through `/json/version`.
 - External CDP endpoints are not restricted by the YunLogin local launch helper, but they must be supplied explicitly.
+
+## Existing `fb.exe` Relaunch
+
+A running Chromium process cannot receive a new command-line argument. If an
+already-running `fb.exe` has no `--remote-debugging-port` and no other CDP
+transport, `yunlogin-fb-cdp.mjs` can inspect it and, after confirmation,
+restart it with a loopback debugging port.
+
+Start read-only:
+
+```powershell
+node scripts/yunlogin-fb-cdp.mjs list --main-only
+node scripts/yunlogin-fb-cdp.mjs inspect --pid <pid>
+```
+
+Plan the restart without changing the process:
+
+```powershell
+node scripts/yunlogin-fb-cdp.mjs restart --pid <pid> --port 9222 --dry-run
+```
+
+Apply it only after the user confirms the browser may close and reopen:
+
+```powershell
+node scripts/yunlogin-fb-cdp.mjs restart --pid <pid> --port 9222 --confirm-restart --output fb-session.json
+```
+
+The helper preserves the existing arguments, removes any previous
+remote-debugging flags, and appends:
+
+```text
+--remote-debugging-address=127.0.0.1
+--remote-debugging-port=<port>
+```
+
+It then waits for `/json/version`, connects to the returned WebSocket, and
+verifies the endpoint with `Browser.getVersion`. Use the session file for
+follow-up control:
+
+```powershell
+node scripts/yunlogin-fb-cdp.mjs check --session-file fb-session.json
+node scripts/yunlogin-fb-cdp.mjs targets --session-file fb-session.json
+node scripts/yunlogin-fb-cdp.mjs eval --session-file fb-session.json --expression "document.title"
+node scripts/yunlogin-fb-cdp.mjs close --session-file fb-session.json
+```
+
+Process command lines are redacted by default. `--show-sensitive` prints the raw
+command line and is only for an explicit request with a safe output destination.
+The session file never contains the raw command line or the environment data
+embedded in it. The helper rejects non-loopback CDP URLs. Prefer the managed
+`POST /api/v2/browser/start` flow whenever the target is a normal YunLogin
+environment, because that flow returns its own CDP endpoint without restarting
+the Workbench process.
 
 ## `append_cmd` Purpose
 

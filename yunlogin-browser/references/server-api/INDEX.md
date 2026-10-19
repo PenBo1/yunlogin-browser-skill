@@ -1,17 +1,73 @@
 # Server API Index
 
-Navigation for the 51 cataloged management-center endpoints. Use this page to find the right route, then read its document before sending a request.
+Navigation for the 54 cataloged management-center endpoints and the research artifacts that back them.
+Coverage, depth, and the explicit not-tested list live in [COVERAGE.md](COVERAGE.md).
+Keep this surface separate from the localhost API documentation in `../api/`.
 
+## Authentication And Session
+
+Read [TOKEN_SETUP.md](TOKEN_SETUP.md) for customer-facing storage, loading, cleanup, and rotation guidance.
+
+Set the bearer token through the environment. Never place the token in source files, Markdown, command arguments, logs, or responses.
+
+When authorized account credentials are available, `node scripts/yunlogin-auth.mjs login` calls `POST /v2/sso/login`, caches the returned token without printing it, and writes the normal user-level server session. Read [endpoints/sso-login.md](endpoints/sso-login.md) for the full field reference.
+
+```powershell
+$env:YUNLOGIN_SERVER_TOKEN = "<current bearer token>"
+```
+
+Optional environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `YUNLOGIN_SERVER_COOKIE` | Optional Cookie header for deployments that require it. |
+| `YUNLOGIN_SERVER_LANG` | Optional `Lang` header. Default: `zh`. |
+| `YUNLOGIN_SERVER_COMPANY_ID` | Optional default `companyid` injection for cataloged endpoints. |
+| `YUNLOGIN_SERVER_USER_ID` | Optional default `userid` injection for cataloged endpoints. |
+| `YUNLOGIN_TIMEOUT_MS` | Request timeout in milliseconds. Default: `30000`. |
+
+The server origin is fixed by the catalog to `https://d126447d359e70c0.yunlogin.com` and cannot be changed at runtime. Use `scripts/yunlogin-server-api.mjs` with an endpoint ID from the catalog. The helper rejects unknown endpoints, requires a token for authenticated live requests, supports public endpoints marked `requires_auth: false`, supports `--dry-run`, and redacts common credential fields by default.
+
+## Research Artifacts
+
+- Start here - one-page research summary: [RESEARCH_SUMMARY.md](RESEARCH_SUMMARY.md)
 - Machine-readable catalog: [endpoints.json](endpoints.json)
 - Shared request and response rules: [WORKFLOW.md](WORKFLOW.md)
 - Error contract: [ERRORS.md](ERRORS.md)
 - Per-endpoint live results: [TEST_REPORT.md](TEST_REPORT.md)
+- Per-parameter measured effects: [PARAMETER_MATRIX.md](PARAMETER_MATRIX.md)
+- Live response field inventory: [FIELD_INVENTORY.md](FIELD_INVENTORY.md)
+- Supplemental second-account field inventory (routes the reference session could not reach): [FIELD_INVENTORY_ACCOUNT_B.md](FIELD_INVENTORY_ACCOUNT_B.md)
+- Cross-account verification (which unresolved routes a second account proved, and what stayed dead): [CROSS_ACCOUNT_VERIFICATION.md](CROSS_ACCOUNT_VERIFICATION.md)
+- Per-route test status (exercised / dead / withheld / documented-only): [ROUTE_TEST_STATUS.md](ROUTE_TEST_STATUS.md)
+- Boundary evidence for the last blocked routes, per account: [BOUNDARY_EVIDENCE.md](BOUNDARY_EVIDENCE.md)
+- Observed value domains for enum-like fields: [FIELD_VALUES.md](FIELD_VALUES.md)
+- Confirmed code meanings: [CODE_LEGENDS.md](CODE_LEGENDS.md)
+- Browse by business family: [DOMAIN_INDEX.md](DOMAIN_INDEX.md)
+- Request parameters and enum behaviour: [REQUEST_PARAMS.md](REQUEST_PARAMS.md)
+- Behaviour drift between sweeps: [DRIFT.md](DRIFT.md)
+- Machine-readable drift detail: [route-drift.json](route-drift.json)
+- Write persistence round trips: [WRITE_EFFECTIVENESS.md](WRITE_EFFECTIVENESS.md)
+- Hard vs soft deletes: [DELETE_SEMANTICS.md](DELETE_SEMANTICS.md)
+- End-to-end audit: `node scripts/dev/run-api-audit.mjs`
+- Separate server-side userapi surface: [USERAPI_SURFACE.md](USERAPI_SURFACE.md)
+- Full extracted route catalog (507 routes): [ROUTE_CATALOG.md](ROUTE_CATALOG.md)
+- Deployed-client drift and coverage gaps: [BUNDLE_DRIFT.md](BUNDLE_DRIFT.md)
+- Routes the sweep refuses to probe, with reasons: [BLOCKLIST.md](BLOCKLIST.md)
+- Parameter-validation messages captured by the sweep: [PARAM_ERRORS.md](PARAM_ERRORS.md)
+- Response enum values that carry a confirmed meaning: [ENUM_MEANINGS.md](ENUM_MEANINGS.md)
+- Full-surface response fields: [ROUTE_FIELDS.md](ROUTE_FIELDS.md)
+- Write round trips and parameter discovery: [WRITE_ROUNDTRIPS.md](WRITE_ROUNDTRIPS.md)
+- Write-route parameter/behaviour table: [WRITE_ROUTE_PARAMS.md](WRITE_ROUTE_PARAMS.md)
+- Envelope / key-name / type traps: [RESPONSE_SHAPES.md](RESPONSE_SHAPES.md)
+- Client call-site request-field evidence: [CLIENT_CALLSITES.md](CLIENT_CALLSITES.md)
 
 ## Find By Task
 
 | I want to | Use |
 | --- | --- |
 | Check that my session works | `my-user-info` |
+| Log in with a username and password | `sso-login` |
 | See the environments on the account | `browser-list` |
 | Read the preferences behind the environment list | `browser-settings` |
 | Build a creation template | `fingerprint-uri` then `fingerprint-defaults` |
@@ -25,7 +81,7 @@ Navigation for the 51 cataloged management-center endpoints. Use this page to fi
 | See which account users belong to several environments at once | `account-users-get` |
 | Pick a proxy | `proxy-cloud-list`, `proxy-self-list`, or `proxy-dynamic-list` |
 | Inspect proxy devices and their usage | `find-devices`, `proxy-device-logs` |
-| Organise environments | `server-group-list`, `proxy-tag-list` |
+| Organise environments | `server-group-list`, `proxy-tag-list` (definitions only; per-group member counts come from `browser-list`) |
 | Add a new group or tag | `server-group-create`, `proxy-tag-upsert` |
 | Add or remove people | `team-members`, `team-invite-code` |
 | Understand who can do what | `team-roles`, `role-department-meal` |
@@ -104,8 +160,8 @@ Navigation for the 51 cataloged management-center endpoints. Use this page to fi
 | `team-invite-code` | POST | `/v2/team/invite/getCode` | Read or rotate the company invitation code. | sensitive | [doc](endpoints/team-invite-code.md) |
 | `my-companies` | POST | `/v2/team/myCompanies` | List the companies the signed-in user belongs to. |  | [doc](endpoints/my-companies.md) |
 | `member-profile` | POST | `/v2/team/member/myInfo` | Return the signed-in member profile. |  | [doc](endpoints/member-profile.md) |
-| `current-company-info` | GET | `/v2/team/curCompanyInfo` | Company profile route; not served by the tested origin. | unavailable | [doc](endpoints/current-company-info.md) |
-| `company-user-devices` | GET | `/v2/team/company/user/devices` | Company device list route; not served by the tested origin. | unavailable | [doc](endpoints/company-user-devices.md) |
+| `current-company-info` | POST | `/v2/team/curCompanyInfo` | Return the profile of the company tied to the token. |  | [doc](endpoints/current-company-info.md) |
+| `company-user-devices` | POST | `/v2/team/company/user/devices` | Return devices registered against company users. |  | [doc](endpoints/company-user-devices.md) |
 | `team-login-logs` | POST | `/v2/team/loginlogs` | Return member login logs. |  | [doc](endpoints/team-login-logs.md) |
 | `auth-log-permissions` | POST | `/v2/logs/auth/perms` | Return the permission list for authorization logs. |  | [doc](endpoints/auth-log-permissions.md) |
 | `auth-log-options` | POST | `/v2/logs/auth/options` | Return the filter options for authorization logs. |  | [doc](endpoints/auth-log-options.md) |
@@ -139,10 +195,11 @@ Navigation for the 51 cataloged management-center endpoints. Use this page to fi
 | Endpoint ID | Method | Path | Purpose | Flag | Doc |
 | --- | --- | --- | --- | --- | --- |
 | `my-user-info` | POST | `/v2/sso/auth/myUserinfo` | Return the signed-in user profile; the standard token check. |  | [doc](endpoints/my-user-info.md) |
+| `sso-login` | POST | `/v2/sso/login` | Authenticate with username/password and return a bearer token. | sensitive | [doc](endpoints/sso-login.md) |
 | `token-refresh` | POST | `/v2/sso/auth/tokenRefresh` | Exchange the bearer token for a fresh one that carries an explicit expiry. |  | [doc](endpoints/token-refresh.md) |
 | `authentication-check` | GET | `/v2/team/authentication/check` | Return the account-level authentication state. |  | [doc](endpoints/authentication-check.md) |
 | `company-face-check` | GET | `/v2/team/authentication/companyFourElementsFaceCheck` | Return the company face verification state. |  | [doc](endpoints/company-face-check.md) |
-| `team-authentication-get` | POST | `/v2/team/authentication/get` | Company authentication detail route; not served by the tested origin. | unavailable | [doc](endpoints/team-authentication-get.md) |
+| `team-authentication-get` | GET | `/v2/team/authentication/get` | Return the user/company real-name authentication detail. |  | [doc](endpoints/team-authentication-get.md) |
 
 ## Conventions
 
@@ -151,3 +208,17 @@ Navigation for the 51 cataloged management-center endpoints. Use this page to fi
 - Read the HTTP status and the business `code` separately. Most failures arrive as HTTP 200 with a non-200 code.
 - The helper only accepts IDs from [endpoints.json](endpoints.json) and never sends an arbitrary URL.
 - Write routes are lenient: several of them return `code: 200` even when they created nothing, so verify the result by re-reading the resource.
+
+
+
+
+
+
+
+
+
+## Security Boundary
+
+The server API uses an HTTPS management-center origin and a bearer token. The local API uses a loopback origin and does not use this token. Do not silently switch between the two surfaces.
+
+Responses can contain cookies, proxy credentials, account credentials, and account identifiers. The helper redacts common sensitive fields by default. Use `--show-sensitive` only when the user explicitly requests raw values and the output destination is safe.

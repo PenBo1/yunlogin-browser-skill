@@ -12,19 +12,28 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveClientOrigin } from "./lib/client-origin.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const skillDir = path.resolve(scriptDir, "..");
 
 const args = new Set(process.argv.slice(2));
+if (args.has("--audit")) {
+  const forwarded = ["--skip-heavy", "--json"].filter((flag) => args.has(flag));
+  const result = spawnSync(process.execPath, [path.join(scriptDir, "dev", "run-api-audit.mjs"), ...forwarded], { cwd: skillDir, stdio: "inherit" });
+  process.exit(result.status ?? 1);
+}
 if (args.has("-h") || args.has("--help")) {
   console.log(`Usage: node scripts/yunlogin-doctor.mjs [--live] [--json]
 
   --live   Also probe the local API, the local client API, and the cached
            server session. Every live probe is read-only.
+  --audit  Run the full read/write/delete audit chain instead (scripts/dev/run-api-audit.mjs).
   --json   Print only the machine-readable summary.
 `);
   process.exit(0);
@@ -71,9 +80,10 @@ const REQUIRED_PATHS = [
   "LICENSE",
   "agents/openai.yaml",
   "references/INDEX.md",
-  "references/api/README.md",
-  "references/client-api/README.md",
-  "references/server-api/README.md",
+  "references/api/INDEX.md",
+  "references/client-api/INDEX.md",
+  "references/client-api/STARTUP.md",
+  "references/server-api/INDEX.md",
   "references/server-api/INDEX.md",
   "references/server-api/endpoints.json",
   "references/server-api/ERRORS.md",
@@ -84,15 +94,24 @@ const REQUIRED_PATHS = [
   "scripts/yunlogin-api.mjs",
   "scripts/yunlogin-auth.mjs",
   "scripts/yunlogin-cdp.mjs",
+  "scripts/yunlogin-fb-cdp.mjs",
+  "scripts/yunlogin-client.mjs",
+  "scripts/yunlogin-ports.mjs",
+  "references/client-api/PORTS.md",
   "scripts/yunlogin-env.mjs",
   "scripts/yunlogin-server-api.mjs",
   "scripts/lib/local-token-store.mjs",
   "scripts/lib/server-token.mjs",
+  "scripts/lib/client-bundle.mjs",
   "scripts/lib/tag-colors.mjs",
   "scripts/dev/validate-api-docs.mjs",
 ];
 
 const TEXT_EXTENSIONS = [".md", ".json", ".mjs", ".yaml", ".yml", ".txt"];
+// The management-center research surface records raw server messages verbatim,
+// including Chinese business errors. Every other file in the skill stays ASCII-only.
+const ASCII_NEUTRAL = /^references[\\/]server-api[\\/]|^scripts[\\/]dev[\\/]render-(route-catalog|write-params)\.mjs$/;
+
 const TOKEN_LIKE = /eyJ[A-Za-z0-9_-]{20,}\./;
 const REQUIRED_DOC_MARKERS = ["## Request", "## Response", "## Error Handling", "- Verified:"];
 
@@ -147,9 +166,21 @@ async function checkCatalogs() {
   }
   record("catalog", problems.length === 0, problems.length ? problems.slice(0, 5).join("; ") : `${catalog.endpoints.length} server endpoints and their documents agree`);
 
-  const localIndex = await readFile(path.join(skillDir, "references/api/README.md"), "utf8");
+  const localIndex = await readFile(path.join(skillDir, "references/api/INDEX.md"), "utf8");
   const localEntries = [...localIndex.matchAll(/\[[^\]]+\]\(\.\/([^)]+\.md)\)\s*\|\s*`([^`]+)`/g)];
   record("local-index", localEntries.length > 0, `${localEntries.length} local API rows in the index`);
+
+  // A full sweep overwrites route-sweep.json and leaves every route with its generic-body shape.
+  // The resolved-route re-probe has to run afterwards or field coverage silently collapses back to
+  // the envelope; this is the regression that produced the guard.
+  const sweep = JSON.parse(await readFile(path.join(skillDir, "references/server-api/route-sweep.json"), "utf8"));
+  const reprobed = (sweep.results ?? []).filter((row) => row.reprobedAt).length;
+  const keys = (sweep.results ?? []).map((row) => row.key);
+  const problems2 = [];
+  if (!sweep.reprobedAt) problems2.push("no top-level reprobedAt; run reprobe-resolved-routes.mjs after a sweep");
+  if (reprobed === 0) problems2.push("no route carries reprobedAt; the resolved-route re-probe has not run");
+  if (new Set(keys).size !== keys.length) problems2.push("route-sweep.json has duplicate route keys");
+  record("sweep-reprobe", problems2.length === 0, problems2.length ? problems2.join("; ") : `${reprobed} routes re-probed with resolved inputs`);
 }
 
 async function checkHygiene() {
@@ -158,13 +189,38 @@ async function checkHygiene() {
 
   const secretHits = [];
   const encodingHits = [];
+  let neutralFiles = 0;
   for (const file of textFiles) {
     const source = await readFile(file, "utf8");
-    if (TOKEN_LIKE.test(source)) secretHits.push(path.relative(skillDir, file));
-    if (/[^\x00-\x7F]/.test(source)) encodingHits.push(path.relative(skillDir, file));
+    const relative = path.relative(skillDir, file);
+    if (TOKEN_LIKE.test(source)) secretHits.push(relative);
+    if (!/[^\x00-\x7F]/.test(source)) continue;
+    if (ASCII_NEUTRAL.test(relative)) { neutralFiles += 1; continue; }
+    encodingHits.push(relative);
   }
   record("no-secrets", secretHits.length === 0, secretHits.length ? `token-like value in ${secretHits.join(", ")}` : `${textFiles.length} text files scanned`);
-  record("ascii-only", encodingHits.length === 0, encodingHits.length ? `non-ASCII text in ${encodingHits.join(", ")}` : "all skill text is ASCII");
+  record("ascii-only", encodingHits.length === 0, encodingHits.length ? `non-ASCII text in ${encodingHits.join(", ")}` : `all skill text is ASCII (${neutralFiles} management-center research files may quote raw server messages)`);
+
+  // A tool once wrote a whole section with one character per line, which destroys the document while
+  // every length, link, and schema check still passes. Detect a run of single-character lines whose
+  // characters join back into prose, and ignore runs that are ordinary JSON or code punctuation.
+  const corruptionHits = [];
+  for (const file of textFiles) {
+    const lines = (await readFile(file, "utf8")).split("\n");
+    let run = [];
+    let best = "";
+    const flush = () => { if (run.join("").length > best.length) best = run.join(""); run = []; };
+    for (const line of lines) {
+      const stripped = line.replace(/\r$/, "");
+      if (stripped.length === 1) run.push(stripped);
+      else flush();
+    }
+    flush();
+    if (best.length >= 40 && /[A-Za-z]{3,}\s[A-Za-z]{3,}\s[A-Za-z]{3,}/.test(best)) {
+      corruptionHits.push(`${path.relative(skillDir, file)} (${best.length} chars)`);
+    }
+  }
+  record("no-prose-corruption", corruptionHits.length === 0, corruptionHits.length ? `one-character-per-line block in ${corruptionHits.join(", ")}` : "no one-character-per-line prose blocks");
 
   const rootLicense = path.resolve(skillDir, "..", "LICENSE");
   if (await exists(rootLicense)) {
@@ -178,26 +234,83 @@ async function checkHygiene() {
   const frontmatter = skillSource.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   const hasName = Boolean(frontmatter && /^name:\s*[a-z0-9-]+\s*$/m.test(frontmatter[1]));
   const hasDescription = Boolean(frontmatter && /^description:\s*\S+/m.test(frontmatter[1]));
-  record("frontmatter", hasName && hasDescription, hasName && hasDescription ? "name and description present" : "SKILL.md frontmatter is incomplete");
+  // Enforce the full skill-creator frontmatter contract in-process so the skill stays valid
+  // without requiring the Python validator to be installed.
+  const frontmatterProblems = [];
+  if (!frontmatter) frontmatterProblems.push("no YAML frontmatter");
+  else {
+    const block = frontmatter[1];
+    const allowedKeys = new Set(["name", "description", "license", "allowed-tools", "metadata"]);
+    for (const key of [...block.matchAll(/^([A-Za-z0-9_-]+):/gm)].map((m) => m[1])) {
+      if (!allowedKeys.has(key)) frontmatterProblems.push(`unexpected key ${key}`);
+    }
+    const name = (block.match(/^name:\s*(.+)$/m)?.[1] ?? "").trim();
+    if (!/^[a-z0-9-]+$/.test(name)) frontmatterProblems.push("name is not hyphen-case");
+    else if (name.startsWith("-") || name.endsWith("-") || name.includes("--")) frontmatterProblems.push("name has a stray hyphen");
+    else if (name.length > 64) frontmatterProblems.push("name is longer than 64 characters");
+    const description = (block.match(/^description:\s*(.+)$/m)?.[1] ?? "").trim();
+    if (!description) frontmatterProblems.push("description is empty");
+    else if (description.length > 1024) frontmatterProblems.push("description is longer than 1024 characters");
+    else if (description.includes("<") || description.includes(">")) frontmatterProblems.push("description contains an angle bracket");
+    else if (description.startsWith("[TODO:")) frontmatterProblems.push("description is an unfinished TODO");
+    const bodyWithoutCode = skillSource.slice(frontmatter[0].length).replace(/```[\s\S]*?```/g, "");
+    if (/^\s*\[TODO:[^\]]*\]\s*$/m.test(bodyWithoutCode)) frontmatterProblems.push("body contains an unfinished TODO placeholder");
+  }
+  record("frontmatter", frontmatterProblems.length === 0, frontmatterProblems.length === 0 ? "name, description, and keys satisfy the skill-creator contract" : frontmatterProblems.join("; "));
+}
+
+// A validation-only run must never rewrite the user's token cache. A forward test found that
+// "status" and "--dry-run" could both trigger a refresh, so the fingerprint is compared around them.
+async function tokenCacheFingerprint() {
+  const base = process.platform === "win32"
+    ? process.env.LOCALAPPDATA ?? path.join(process.env.USERPROFILE ?? ".", "AppData", "Local")
+    : path.join(process.env.HOME ?? ".", ".local", "share");
+  const file = path.join(base, "yunlogin-browser", "server-token.json");
+  try {
+    const [buffer, info] = await Promise.all([readFile(file), stat(file)]);
+    return `${createHash("sha256").update(buffer).digest("hex")}:${info.mtimeMs}`;
+  } catch {
+    return "absent";
+  }
 }
 
 async function checkBehaviour() {
   const checks = [];
+  const cacheBefore = await tokenCacheFingerprint();
+  runNode("scripts/yunlogin-auth.mjs", ["status"]);
+  runNode("scripts/yunlogin-server-api.mjs", ["browser-list", "--dry-run"]);
+  const cacheAfter = await tokenCacheFingerprint();
+  checks.push(["dry-run is side-effect free", cacheBefore === cacheAfter, cacheBefore === cacheAfter ? "status and browser-list --dry-run left the token cache untouched" : "the token cache changed during a validation-only run"]);
+
+  // The documented no-cache-write mode must keep the user cache untouched even when the helper
+  // would normally refresh. YUNLOGIN_SERVER_TOKEN_FILE redirects the cache path and a zero refresh
+  // skew disables the proactive refresh, so neither the user cache nor the redirect path may change.
+  const redirectedPath = path.join(os.tmpdir(), `yl-doctor-token-${process.pid}.json`);
+  const redirectBefore = await tokenCacheFingerprint();
+  runNode("scripts/yunlogin-server-api.mjs", ["browser-list", "--dry-run"], {
+    YUNLOGIN_SERVER_TOKEN_FILE: redirectedPath,
+    YUNLOGIN_SERVER_REFRESH_SKEW_MS: "0",
+  });
+  const redirectAfter = await tokenCacheFingerprint();
+  const redirectClean = redirectBefore === redirectAfter && !(await exists(redirectedPath));
+  checks.push([
+    "token-file redirect leaves the cache untouched",
+    redirectClean,
+    redirectClean ? "the redirect path and the user cache both stayed clean" : "the user cache or the redirect path changed",
+  ]);
 
   const list = runNode("scripts/yunlogin-server-api.mjs", ["--list"]);
   const listPayload = parseTrailingJson(list.stdout);
   checks.push(["server-api --list", list.status === 0 && Array.isArray(listPayload?.endpoints), listPayload ? `${listPayload.count} endpoint ids` : list.stderr.trim().slice(0, 120)]);
 
   const tokenRefreshDryRun = runNode("scripts/yunlogin-server-api.mjs", ["token-refresh", "--dry-run"]);
-  const tokenRefreshPlan = parseTrailingJson(tokenRefreshDryRun.stdout);
   const tokenRefreshWired =
-    tokenRefreshDryRun.status === 0 &&
-    tokenRefreshPlan?.url?.endsWith("/v2/sso/auth/tokenRefresh") === true &&
-    tokenRefreshPlan?.method === "POST";
+    tokenRefreshDryRun.status !== 0 &&
+    tokenRefreshDryRun.stderr.includes("Independent token refresh is disabled");
   checks.push([
-    "token-refresh cataloged",
+    "independent token refresh blocked",
     tokenRefreshWired,
-    tokenRefreshWired ? "dry-run resolves the refresh route" : tokenRefreshDryRun.stderr.trim().slice(0, 120),
+    tokenRefreshWired ? "no helper-only token rotation" : tokenRefreshDryRun.stderr.trim().slice(0, 120),
   ]);
 
   const importCheck = spawnSync(
@@ -252,6 +365,30 @@ async function checkBehaviour() {
   const cdpUsage = runNode("scripts/yunlogin-cdp.mjs", []);
   checks.push(["cdp usage guard", cdpUsage.status !== 0 && /Usage:/i.test(cdpUsage.stderr), `exit ${cdpUsage.status}`]);
 
+  const fbCdpUsage = runNode("scripts/yunlogin-fb-cdp.mjs", []);
+  checks.push(["fb cdp usage guard", fbCdpUsage.status !== 0 && /Usage:/i.test(fbCdpUsage.stderr), `exit ${fbCdpUsage.status}`]);
+
+  const clientUsage = runNode("scripts/yunlogin-client.mjs", []);
+  checks.push(["client lifecycle usage guard", clientUsage.status !== 0 && /Usage:/i.test(clientUsage.stderr), `exit ${clientUsage.status}`]);
+
+  const discovery = runNode("scripts/dev/test-client-discovery.mjs", []);
+  checks.push(["client discovery and secrecy", discovery.status === 0, discovery.status === 0 ? discovery.stdout.trim() : discovery.stderr.trim().slice(0, 200)]);
+
+  const workbenchTest = runNode("scripts/dev/test-workbench-session.mjs", []);
+  checks.push(["workbench session synchronization", workbenchTest.status === 0, workbenchTest.status === 0 ? workbenchTest.stdout.trim() : workbenchTest.stderr.trim().slice(0, 200)]);
+
+  const clientStartGate = runNode("scripts/yunlogin-client.mjs", ["start", "--dry-run"]);
+  const clientStartPayload = parseTrailingJson(clientStartGate.stdout);
+  checks.push(["client start dry-run gate", clientStartGate.status === 0 && clientStartPayload?.dryRun === true, `exit ${clientStartGate.status}`]);
+
+  const syncDryRun = runNode("scripts/yunlogin-auth.mjs", ["sync-workbench", "--dry-run"]);
+  const syncDryPayload = parseTrailingJson(syncDryRun.stdout);
+  checks.push(["workbench sync dry-run", syncDryRun.status === 0 && syncDryPayload?.dryRun === true, syncDryRun.status === 0 ? "plans a sync without writing credentials" : syncDryRun.stderr.trim().slice(0, 120)]);
+
+  const ssoLoginDryRun = runNode("scripts/yunlogin-server-api.mjs", ["sso-login", "--body", "{\"username\":\"doctor@example.test\",\"password\":\"doctor-password\"}", "--dry-run"]);
+  const ssoLoginDryPayload = parseTrailingJson(ssoLoginDryRun.stdout);
+  checks.push(["sso login dry-run", ssoLoginDryRun.status === 0 && ssoLoginDryPayload?.endpoint === "sso-login" && ssoLoginDryPayload?.body?.value?.password === "[REDACTED]", ssoLoginDryRun.status === 0 ? "plans the public login route" : ssoLoginDryRun.stderr.trim().slice(0, 120)]);
+
   const docValidator = runNode("scripts/dev/validate-api-docs.mjs", []);
   checks.push(["documentation validator", docValidator.status === 0, docValidator.status === 0 ? docValidator.stdout.trim().split("\n").join(" | ") : docValidator.stderr.trim().slice(0, 160)]);
 
@@ -274,12 +411,13 @@ async function checkLive() {
   const local = await probe("http://localhost:50213/status", { method: "GET" });
   record("live:local-api", Boolean(local.payload), local.error ?? `code=${local.payload?.code}`);
 
-  const client = await probe("http://127.0.0.1:52446/api/v1/client/gpu_info", {
+  const clientOrigin = await resolveClientOrigin();
+  const client = await probe(`${clientOrigin}/api/v1/client/gpu_info`, {
     method: "POST",
     headers: { "content-type": "text/plain;charset=UTF-8" },
     body: "{}",
   });
-  record("live:client-api", client.payload?.code === 0, client.error ?? `code=${client.payload?.code} adapters=${client.payload?.data?.adapters?.length ?? 0}`);
+  record("live:client-api", client.payload?.code === 0, client.error ? `${clientOrigin} ${client.error}` : `${clientOrigin} code=${client.payload?.code} adapters=${client.payload?.data?.adapters?.length ?? 0}`);
 
   const status = runNode("scripts/yunlogin-auth.mjs", ["status"]);
   const statusPayload = parseTrailingJson(status.stdout);

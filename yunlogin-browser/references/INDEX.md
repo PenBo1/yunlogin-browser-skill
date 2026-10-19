@@ -2,8 +2,8 @@
 
 Pick the surface first, then the route. This page is the map for the whole skill.
 
-- **Local API** - `http://localhost:50213/api/v2/...` - [api/README.md](api/README.md)
-- **Local client API** - `http://127.0.0.1:52446/api/v1/...` - [client-api/README.md](./client-api/README.md)
+- **Local API** - `http://localhost:50213/api/v2/...` - [api/INDEX.md](api/INDEX.md)
+- **Local client API** - loopback port discovered at runtime - [client-api/INDEX.md](./client-api/INDEX.md)
 - **Server API** - `https://d126447d359e70c0.yunlogin.com/v2/...` - [server-api/INDEX.md](server-api/INDEX.md)
 
 ## Layout
@@ -12,7 +12,7 @@ Pick the surface first, then the route. This page is the map for the whole skill
 references/
   INDEX.md          this map
   api/              local desktop API, port 50213 (23 endpoint documents)
-  client-api/       local client helper service, port 52446
+  client-api/       local client helper service, discovered loopback port
   server-api/       management center: catalog, indexes, error contract, endpoint documents
   workflows/        task guides: environments, environment inputs, tokens, CDP, Playwright CLI
   testing.md        what was verified and how
@@ -24,7 +24,7 @@ references/
 | --- | --- | --- |
 | Read or search account data: environments, proxies, accounts, team, plans, notices | **Server API** | The management center owns the data. Prefer the server route for every query and for every create, clone, or delete. |
 | Launch, stop, or inspect a running environment browser | **Local API** | Only the desktop service can start a browser. The server API has no launch route. |
-| Read machine facts such as GPU adapters, or clear local environment data | **Local client API** | The helper service on port 52446 serves local machine state. |
+| Read machine facts such as GPU adapters, or clear local environment data | **Local client API** | The helper service serves local machine state on a discovered loopback port. |
 | Inject or clear local environment Cookies | **Local API** | Cookies are written into the local profile before launch. |
 | Drive the launched browser | **CDP** | Connect to `data.ws.puppeteer` from the local launch response. |
 
@@ -35,6 +35,7 @@ The split matters: use the server API to decide **what** to operate, and the loc
 | I want to | Surface | Use |
 | --- | --- | --- |
 | Check that my server session works | Server | `my-user-info` |
+| Log in with a username and password | Server | `sso-login` |
 | See or filter environments | Server | `browser-list` |
 | Read the preferences behind the environment list | Server | `browser-settings` |
 | Build a creation template | Server | `fingerprint-uri` then `fingerprint-defaults` |
@@ -54,12 +55,12 @@ The split matters: use the server API to decide **what** to operate, and the loc
 | Inject or clear environment Cookies | Local | `cookie/upsert`, `cookie/clear` |
 | Read GPU adapters | Local client | `POST /api/v1/client/gpu_info` |
 | Clear an environment's local data | Local client | `POST /api/v1/client/clean_env` |
-| Capture the local API token | Local plus CDP | `scripts/yunlogin-cdp.mjs capture-local-token` |
+| Synchronize current Workbench credentials | Workbench CDP | `scripts/yunlogin-auth.mjs sync-workbench` |
 | Automate the launched browser | CDP | [cdp-automation.md](./workflows/cdp-automation.md) |
 
 ## Local API
 
-23 documented loopback routes on port 50213. Read the full index in [api/README.md](api/README.md).
+23 documented loopback routes on port 50213. Read the full index in [api/INDEX.md](api/INDEX.md).
 
 | Document | Endpoint |
 | --- | --- |
@@ -91,7 +92,7 @@ Key routes for launching: `POST /api/v2/browser/start` returns the CDP URL, `GET
 
 ## Local Client API
 
-3 routes on port 52446. Full detail in [client-api/README.md](./client-api/README.md).
+3 routes on a discovered loopback port. Full detail in [client-api/INDEX.md](./client-api/INDEX.md).
 
 | Method | Path | Purpose |
 | --- | --- | --- |
@@ -101,14 +102,18 @@ Key routes for launching: `POST /api/v2/browser/start` returns the CDP URL, `GET
 
 ## Server API
 
-53 cataloged management-center routes: 7 create or change data, 10 return credentials or account metadata, and 3 are not served by the tested origin.
+54 cataloged management-center routes: 7 create or change data, 10 return credentials or account metadata, and all 54 are served by the tested origin.
+
+Field inventory: [server-api/FIELD_INVENTORY.md](server-api/FIELD_INVENTORY.md).
+
+Supplemental second-account field inventory: [server-api/FIELD_INVENTORY_ACCOUNT_B.md](server-api/FIELD_INVENTORY_ACCOUNT_B.md).
 
 | Flag | Meaning |
 | --- | --- |
 | (blank) | Read-only. |
 | write | Creates, changes, or deletes data. Confirm with the user and preflight with `--dry-run`. |
 | sensitive | Returns credentials, Cookies, or account records. |
-| unavailable | Not served by the tested origin; see the endpoint document. |
+| unavailable | Not served by the tested origin; see the endpoint document. No cataloged route currently uses this flag. |
 
 ### Environments
 
@@ -168,8 +173,8 @@ Key routes for launching: `POST /api/v2/browser/start` returns the CDP URL, `GET
 | `team-invite-code` | POST | `/v2/team/invite/getCode` | Read or rotate the company invitation code. | sensitive | [doc](server-api/endpoints/team-invite-code.md) |
 | `my-companies` | POST | `/v2/team/myCompanies` | List the companies the signed-in user belongs to. |  | [doc](server-api/endpoints/my-companies.md) |
 | `member-profile` | POST | `/v2/team/member/myInfo` | Return the signed-in member profile. |  | [doc](server-api/endpoints/member-profile.md) |
-| `current-company-info` | GET | `/v2/team/curCompanyInfo` | Company profile route; not served by the tested origin. | unavailable | [doc](server-api/endpoints/current-company-info.md) |
-| `company-user-devices` | GET | `/v2/team/company/user/devices` | Company device list route; not served by the tested origin. | unavailable | [doc](server-api/endpoints/company-user-devices.md) |
+| `current-company-info` | POST | `/v2/team/curCompanyInfo` | Return the profile of the company tied to the token. |  | [doc](server-api/endpoints/current-company-info.md) |
+| `company-user-devices` | POST | `/v2/team/company/user/devices` | Return devices registered against company users. |  | [doc](server-api/endpoints/company-user-devices.md) |
 | `team-login-logs` | POST | `/v2/team/loginlogs` | Return member login logs. |  | [doc](server-api/endpoints/team-login-logs.md) |
 | `auth-log-permissions` | POST | `/v2/logs/auth/perms` | Return the permission list for authorization logs. |  | [doc](server-api/endpoints/auth-log-permissions.md) |
 | `auth-log-options` | POST | `/v2/logs/auth/options` | Return the filter options for authorization logs. |  | [doc](server-api/endpoints/auth-log-options.md) |
@@ -203,10 +208,11 @@ Key routes for launching: `POST /api/v2/browser/start` returns the CDP URL, `GET
 | Endpoint ID | Method | Path | Purpose | Flag | Doc |
 | --- | --- | --- | --- | --- | --- |
 | `my-user-info` | POST | `/v2/sso/auth/myUserinfo` | Return the signed-in user profile; the standard token check. |  | [doc](server-api/endpoints/my-user-info.md) |
+| `sso-login` | POST | `/v2/sso/login` | Authenticate with username/password and return a bearer token. | sensitive | [doc](server-api/endpoints/sso-login.md) |
 | `token-refresh` | POST | `/v2/sso/auth/tokenRefresh` | Exchange the bearer token for a fresh one that carries an explicit expiry. |  | [doc](server-api/endpoints/token-refresh.md) |
 | `authentication-check` | GET | `/v2/team/authentication/check` | Return the account-level authentication state. |  | [doc](server-api/endpoints/authentication-check.md) |
 | `company-face-check` | GET | `/v2/team/authentication/companyFourElementsFaceCheck` | Return the company face verification state. |  | [doc](server-api/endpoints/company-face-check.md) |
-| `team-authentication-get` | POST | `/v2/team/authentication/get` | Company authentication detail route; not served by the tested origin. | unavailable | [doc](server-api/endpoints/team-authentication-get.md) |
+| `team-authentication-get` | GET | `/v2/team/authentication/get` | Return the user/company real-name authentication detail. |  | [doc](server-api/endpoints/team-authentication-get.md) |
 
 The same tables, with the task-based navigation, live in [server-api/INDEX.md](server-api/INDEX.md).
 

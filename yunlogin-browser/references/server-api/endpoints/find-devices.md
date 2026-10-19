@@ -56,62 +56,69 @@ node scripts/yunlogin-server-api.mjs find-devices --body-file request.json
 | Field | Type | Description |
 | --- | --- | --- |
 | `code` | number | Business status code. `200` means success. |
-| `msgCode` | number | Message code. |
-| `data` | array | Matching cloud proxy devices. |
+| `msgCode` | number | Message code. `200` on success. |
+| `data` | array \| null | Matching devices, or `null` when nothing matches. |
 | `msg` | string | Business message. The tested endpoint returned `ok` on success. |
 | `traceId` | string | Request trace ID. |
 
-### `data[]`
+### Row Schema Depends On `trademark`
 
-The returned device object uses the same cloud device schema as [proxy-cloud-list.md](proxy-cloud-list.md). Key fields include:
+`trademark` selects which device schema is returned. Do not reuse one table for both values.
+
+**`trademark: "official"`** returns cloud-device rows (the `proxy-cloud-list` schema). Key fields: `device_id`, `device_name`, `cloud_id`, `cloud_type`, `status`, `company_id`, `from_company_id`, `uid`, `oid`, `proxyaddr`, `proxyu`, `proxyp`, `Proxytype`, `publicip`, `proxyId`, `instance_no`, `details_no`, `ip_place`, `isbind`, `serial`, and a nested `cloud` object.
+
+**`trademark: "self"`** returns self-proxy rows. Observed fields:
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `device_id` | string | Device ID. |
-| `device_name` | string | Device name. |
-| `cloud_id` | string | Cloud ID. |
-| `cloud_type` | number | Cloud type. |
-| `status` | string | Device status. |
-| `company_id` | string | Company ID. |
-| `from_company_id` | string | Source company ID. |
-| `uid` | string | UID. |
-| `oid` | string | Order or owner ID. |
-| `proxyaddr` | string | Proxy address. |
+| `created_at` | string | Creation timestamp. |
+| `updated_at` | string | Last update timestamp. |
+| `deviceid` | string | Device ID. |
+| `companyid` | string | Owning company ID. |
+| `userid` | string | Owning user ID. |
+| `name` | string | Device name. |
+| `proxyaddr` | string | Proxy host and port. |
+| `proxytype` | number | Proxy protocol/type. |
 | `proxyu` | string | Proxy username. Redacted by the helper by default. |
 | `proxyp` | string | Proxy password. Redacted by the helper by default. |
-| `Proxytype` | string | Proxy type. |
-| `publicip` | string | Public IP. |
-| `proxyId` | number | Proxy ID. |
-| `instance_no` | string | Cloud instance number. |
-| `details_no` | string | Cloud detail number. |
-| `ip_place` | string | IP location. |
-| `isbind` | number | Binding state. |
+| `publicip` | string | Public IP/host. |
+| `trademark` | string | Echoes `self`. |
+| `enable` | number | Enabled flag. |
+| `deleteby` | string | Deleting user ID, empty when active. |
+| `notes` | string | Notes. |
+| `login_at` | string | Last login time. |
+| `api` | number | API-driven flag. |
+| `ip_query_channel` | string | IP geolocation channel. |
+| `ip_place` | string | IP geolocation place. |
+| `end_time` | null | Proxy end time when applicable. |
+| `inspect` | number | Inspection flag. |
+| `ip_type` | number | IP type. |
 | `serial` | number | Serial number. |
-| `cloud` | object | Cloud package details. Uses the same nested `cloud` schema as `proxy-cloud-list`. |
+| `isbind` | number | Bound-to-environment flag. |
+| `target_url` | array | Target URLs. |
+| `authority` | number | Authority level. |
+| `authority_userids` | null | Explicitly authorized user IDs. |
 
-### Example Response
+### Example Response (`trademark: "self"`)
 
 ```json
 {
   "code": 200,
-  "msgCode": 0,
+  "msgCode": 200,
   "data": [
     {
-      "device_id": "<device id>",
-      "device_name": "<device name>",
-      "cloud_id": "<cloud id>",
-      "status": "1",
-      "proxyaddr": "<proxy address>",
+      "deviceid": "<device id>",
+      "name": "<device name>",
+      "proxyaddr": "<proxy host:port>",
+      "proxytype": 1,
       "proxyu": "[REDACTED]",
       "proxyp": "[REDACTED]",
       "publicip": "<public ip>",
-      "isbind": 0,
-      "serial": 1,
-      "cloud": {
-        "country": "<country>",
-        "city": "<city>",
-        "name": "<package name>"
-      }
+      "trademark": "self",
+      "enable": 1,
+      "serial": 1122,
+      "isbind": 1,
+      "ip_place": "<country-city>"
     }
   ],
   "msg": "ok",
@@ -125,7 +132,7 @@ Failures arrive as HTTP 200 with a non-200 business code. Read [ERRORS.md](../ER
 
 | Code | Meaning for this endpoint |
 | --- | --- |
-| `200` | Success. |
+| `200` | Success. `data: null` means no device matched. |
 | `1001` | The bearer token was rejected. Run `node scripts/yunlogin-auth.mjs ensure-server`, then ask the user for a fresh token. |
 | `400` | The payload was rejected before business validation. Check the field types and required fields above. |
 | `500` | The server could not decode the request or find the target. Check field types and confirm the referenced IDs exist. |
@@ -134,4 +141,12 @@ Failures arrive as HTTP 200 with a non-200 business code. Read [ERRORS.md](../ER
 
 ## Notes
 
-The helper redacts proxy usernames and passwords by default. Use the cloud proxy list document for the full nested `cloud` field schema.
+- The helper redacts proxy usernames and passwords by default.
+- Use `proxy-cloud-list` for the full cloud `cloud` sub-schema, and `proxy-self-list` for the full self-proxy row.
+- `device_ids: []` returns `data: null` even though `code` stays `200`.
+
+## See Also
+
+- [RESPONSE_SHAPES.md](../RESPONSE_SHAPES.md) - envelope, key-name, and type traps across the surface.
+- [WRITE_ROUNDTRIPS.md](../WRITE_ROUNDTRIPS.md) - verified write round trips and silent-failure notes.
+- [ERRORS.md](../ERRORS.md) - HTTP vs business code contract.

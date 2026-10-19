@@ -18,7 +18,7 @@ Creation and deletion prefer the server API and fall back to the local API. List
 | List tags | server | `GET /v2/proxy/device/findTags` | none |
 | Create or rename tag | server | `POST /v2/proxy/device/updateTag` | none |
 | Delete tag | server | `POST /v2/proxy/device/delTag` | none |
-| Clear local environment data | local client | `POST /api/v1/client/clean_env` on port 52446 | none |
+| Clear local environment data | local client | `POST /api/v1/client/clean_env` on the discovered client port | none |
 
 `--transport auto` (default) tries the server route first. `--transport server` fails instead of falling back. `--transport local` skips the server attempt.
 
@@ -231,7 +231,7 @@ Show the user the exact environment name, ID, group, or tag before confirming. D
 
 1. `POST /v2/newbrowser/getfingerprinturi` returns the base `browseinfo` template for the requested system and kernel.
 2. `POST /v2/newbrowser/getdefaultfingerlist` returns the kernel ID, UA version, screen sizes, CPU and memory presets, and WebGL data.
-3. `POST /api/v1/client/gpu_info` on port 52446 returns the local adapters used for `WebGLVendor` and `WebGLRenderer` when the service is available.
+3. `POST /api/v1/client/gpu_info` on the discovered client port returns the local adapters used for `WebGLVendor` and `WebGLRenderer` when the service is available.
 4. The helper assembles `{ number, randProxy, batch_platform_id, batch_custom_id, batchProxy, browser }` and posts it to `putalluri`.
 
 Every field of that body has a documented source. A modify uses the same schema with `browser.shopid` set to the target, because `putalluri` is an upsert. Read [environment-inputs.md](./environment-inputs.md) for the input map, both sequences, and the field type rules that apply when a read response is reused.
@@ -288,7 +288,7 @@ An environment the helper did not create is never deleted.
 | `delete` without `--confirm-delete` | Exit code 2 with a `needsConfirmation` payload |
 | `putnewgroup` then `deletegroups` | `code: 200` both ways; the group disappeared from `getgroups` |
 | `updateTag` then `delTag` | `code: 200` both ways; the tag disappeared from `findTags` |
-| `POST /api/v1/client/clean_env` on port 52446 | `code: 0`, `msg: Success` |
+| `POST /api/v1/client/clean_env` on the discovered client port | `code: 0`, `msg: Success` |
 | `bootstrap-token` against an existing environment | Reused the environment and deleted nothing |
 | Create with the direct-connection proxy block | `device_type: local`, `inlie: local`, `region: random-random-random`, `ipChannel: ipinfo`, and a detected `proxyip` |
 | Create with the empty template proxy block | Proxy fields are stored blank and the list shows "proxy deleted" |

@@ -30,3 +30,20 @@ For CDP automation, browser launch sessions, and append_cmd guidance, read [CDP 
 | [closeBrowser](./closeBrowser.md) | `GET /api/v2/browser/stop` |
 | [launchBrowser](./launchBrowser.md) | `GET /api/v2/browser/start` |
 | [apiStatus](./apiStatus.md) | `GET /status` |
+
+## Provenance Of These Documents
+
+Each endpoint page carries a `Source:` URL pointing at the desktop build that served it. Those URLs are
+from the `1788343711349` build and **no longer serve JavaScript**: every `/js/...` path the origin does not
+have answers HTTP 200 with the 2053-byte single-page-app shell. A recorded bundle that is gone therefore
+looks like a successful fetch unless the body is checked.
+
+What this means in practice:
+
+- The parameter and response tables on these pages remain the recorded authority for the local desktop
+  mirror, taken from that build.
+- The `Source:` URLs can no longer be used to re-verify them. Re-derive a page from the desktop client in
+  use, or confirm the route live, instead of trusting the URL.
+- The server-side mirror of these routes was re-tested live on 2026-10-10; see
+  [../server-api/USERAPI_SURFACE.md](../server-api/USERAPI_SURFACE.md) for the round trips and the
+  corrections that live testing produced.

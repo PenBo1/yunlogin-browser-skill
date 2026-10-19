@@ -4,9 +4,9 @@
 - Endpoint ID: `authentication-check`
 - Method: `GET`
 - Path: `/v2/team/authentication/check`
-- Tested: 2026-09-24
-- Test result: HTTP 200, business `code: 200`, localized success message
-- Verified: 2026-09-24 by a live sweep of every cataloged server route
+- Tested: 2026-10-09
+- Test result: HTTP 200, business `code: 500`, message `获取授权失败，失败信息 认证失败`
+- Verified: 2026-10-09 by re-probing the route three times; it returned `code: 200` on 2026-09-24
 
 ## Purpose
 
@@ -78,3 +78,16 @@ Failures arrive as HTTP 200 with a non-200 business code. Read [ERRORS.md](../ER
 ## Notes
 
 Sensitive response fields such as credentials, cookies, proxy credentials, and 2FA secrets are redacted by the helper by default. Use `--show-sensitive` only when explicitly required and the output destination is safe.
+
+## See Also
+
+- [RESPONSE_SHAPES.md](../RESPONSE_SHAPES.md) - envelope, key-name, and type traps across the surface.
+- [WRITE_ROUNDTRIPS.md](../WRITE_ROUNDTRIPS.md) - verified write round trips and silent-failure notes.
+- [ERRORS.md](../ERRORS.md) - HTTP vs business code contract.
+
+
+## Drift Note
+
+The route answered `code: 200` with 16 response fields on 2026-09-24 and answers `code: 500` with a
+5-field error envelope now. Treat "authentication check passed" as account-state dependent, not as a fixed
+contract. See [../DRIFT.md](../DRIFT.md).

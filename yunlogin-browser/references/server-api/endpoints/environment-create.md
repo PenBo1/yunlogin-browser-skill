@@ -144,6 +144,8 @@ A payload without `browser` never creates anything, but a payload with any `brow
 node scripts/yunlogin-env.mjs create --name <environment name> --dry-run
 node scripts/yunlogin-env.mjs create --name <environment name>
 node scripts/yunlogin-server-api.mjs environment-create --body-file request.json --dry-run
+
+`yunlogin-env.mjs create --dry-run` prints the assembled `body`, so you can save that `body` as `request.json` and re-send it through `yunlogin-server-api.mjs environment-create` when you want the raw HTTP status and business code in one step.
 ```
 
 ## Response
@@ -195,3 +197,9 @@ Failures arrive as HTTP 200 with a non-200 business code. Read [ERRORS.md](../ER
 
 - Delete the environment with `POST /v2/newbrowser/putdeleteshop`, or with `POST /api/v2/userapi/user/delete` on the local API as a fallback.
 - Creating an environment consumes an account slot. Delete temporary environments after the workflow finishes.
+
+## See Also
+
+- [RESPONSE_SHAPES.md](../RESPONSE_SHAPES.md) - envelope, key-name, and type traps across the surface.
+- [WRITE_ROUNDTRIPS.md](../WRITE_ROUNDTRIPS.md) - verified write round trips and silent-failure notes.
+- [ERRORS.md](../ERRORS.md) - HTTP vs business code contract.

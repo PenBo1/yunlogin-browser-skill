@@ -5,11 +5,14 @@
  *
  * Flow: parse arguments -> enforce a loopback origin -> validate the path ->
  * prepare and redact the request -> dry-run or fetch.
- * See scripts/README.md for operator-facing instructions.
+ * See references/scripts.md for operator-facing instructions.
  */
 
 import { readFile } from "node:fs/promises";
 import { readLocalToken } from "./lib/local-token-store.mjs";
+import { readWorkbenchSession } from "./lib/workbench-cache.mjs";
+import { assertWorkbenchIdentity, syncWorkbench } from "./lib/workbench-session.mjs";
+import { discoverPorts } from "./yunlogin-ports.mjs";
 
 const allowedMethods = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 const sensitiveKeyPattern =
@@ -29,11 +32,8 @@ Options:
   -h, --help             Show this help
 
 Environment:
-  YUNLOGIN_LOCAL_BASE_URL  Local origin (default: http://localhost:50213)
-  YUNLOGIN_BASE_URL        Backward-compatible alias for the local origin
-  YUNLOGIN_LOCAL_TOKEN     Optional local Authorization bearer token
-  YUNLOGIN_LOCAL_TOKEN_FILE Optional local token cache path
-  YUNLOGIN_LOCAL_COOKIE    Optional local Cookie header
+  Authenticated calls synchronize Workbench and use its verified local origin.
+  GET /status discovers the current process-owned local API without credentials.
   YUNLOGIN_TIMEOUT_MS      Request timeout in milliseconds (default: 30000)
 
 Examples:
@@ -222,9 +222,6 @@ function buildHeaders(contentType, localToken) {
   if (localToken) {
     headers.set("authorization", `Bearer ${localToken}`);
   }
-  if (process.env.YUNLOGIN_LOCAL_COOKIE) {
-    headers.set("cookie", process.env.YUNLOGIN_LOCAL_COOKIE);
-  }
   return headers;
 }
 
@@ -241,9 +238,14 @@ async function main() {
   const options = parseArguments(process.argv.slice(2));
   validateMethodAndPath(options.method, options.requestPath);
 
-  const origin = resolveLocalOrigin();
+  const diagnostic = options.method === "GET" && options.requestPath === "/status";
+  if (!options.dryRun && !diagnostic) await syncWorkbench();
+  const current = !options.dryRun && !diagnostic ? await readWorkbenchSession() : null;
+  const discovered = !options.dryRun && diagnostic ? await discoverPorts() : null;
+  const origin = current?.localOrigin ?? (discovered?.localApiOrigins.length === 1 ? discovered.localApiOrigins[0] : options.dryRun ? resolveLocalOrigin() : null);
+  if (!origin) throw new Error("No unique verified YunLogin local API is available.");
   const preparedBody = await prepareBody(options);
-  const localToken = await readLocalToken();
+  const localToken = options.dryRun || diagnostic ? undefined : await readLocalToken();
   const headers = buildHeaders(preparedBody.contentType, localToken);
   const url = new URL(options.requestPath, `${origin}/`);
   const timeoutMs = Number.parseInt(
@@ -272,6 +274,7 @@ async function main() {
     return;
   }
 
+  if (!diagnostic && options.method !== "GET") await assertWorkbenchIdentity(current);
   const response = await fetch(url, {
     method: options.method,
     headers,

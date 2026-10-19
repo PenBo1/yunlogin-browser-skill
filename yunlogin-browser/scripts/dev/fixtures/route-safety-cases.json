@@ -1,0 +1,285 @@
+{
+  "note": "Regression cases for scripts/lib/route-safety.mjs. Each case is the safety-correct answer, not merely the current behaviour: a change that makes a blocked route readable must fail validation.",
+  "cases": [
+    {
+      "name": "createRoleGroup",
+      "method": "POST",
+      "path": "/v2/team/role-group/create",
+      "expect": "blocked",
+      "why": "created an empty-name row for a body without name"
+    },
+    {
+      "name": "createDept",
+      "method": "POST",
+      "path": "/v2/team/dept/create",
+      "expect": "blocked",
+      "why": "creates an empty-name department for {}"
+    },
+    {
+      "name": "repayrecharge",
+      "method": "GET",
+      "path": "/v2/cost/device/repayrecharge",
+      "expect": "blocked",
+      "why": "GET that spends money"
+    },
+    {
+      "name": "notifyPaypal",
+      "method": "GET",
+      "path": "/v2/cost/device/paypal",
+      "expect": "blocked",
+      "why": "payment notification"
+    },
+    {
+      "name": "logout",
+      "method": "POST",
+      "path": "/v2/team/logout",
+      "expect": "blocked",
+      "why": "ends the session"
+    },
+    {
+      "name": "changePwd",
+      "method": "POST",
+      "path": "/v2/sso/auth/changePwd",
+      "expect": "blocked",
+      "why": "identity change"
+    },
+    {
+      "name": "register",
+      "method": "POST",
+      "path": "/v2/sso/register",
+      "expect": "blocked",
+      "why": "creates an account"
+    },
+    {
+      "name": "sendCode",
+      "method": "POST",
+      "path": "/v2/sso/sendCode",
+      "expect": "blocked",
+      "why": "sends an SMS"
+    },
+    {
+      "name": "migrateApply",
+      "method": "POST",
+      "path": "/v2/newbrowser/migrate/apply",
+      "expect": "blocked",
+      "why": "bulk migration"
+    },
+    {
+      "name": "generateuuid",
+      "method": "POST",
+      "path": "/v2/newbrowser/migrate/generateuuid",
+      "expect": "blocked",
+      "why": "writes import rows"
+    },
+    {
+      "name": "createPluginGroup",
+      "method": "POST",
+      "path": "/v2/plugin/group/createPluginGroup",
+      "expect": "blocked",
+      "why": "writes a plugin group with no delete route"
+    },
+    {
+      "name": "deleteEnvironment",
+      "method": "POST",
+      "path": "/v2/newbrowser/putdeleteshop",
+      "expect": "blocked",
+      "why": "deletes environments"
+    },
+    {
+      "name": "batchDelete",
+      "method": "POST",
+      "path": "/v2/proxy/device/batchdelete",
+      "expect": "blocked",
+      "why": "bulk delete"
+    },
+    {
+      "name": "clearCookie",
+      "method": "POST",
+      "path": "/v2/userapi/cookie/clear",
+      "expect": "blocked",
+      "why": "destroys local profile data"
+    },
+    {
+      "name": "changeUserinfo",
+      "method": "POST",
+      "path": "/v2/sso/auth/changeUserinfo",
+      "expect": "blocked",
+      "why": "write whose name contains info"
+    },
+    {
+      "name": "configsettings",
+      "method": "POST",
+      "path": "/v2/newbrowser/configsettings",
+      "expect": "blocked",
+      "why": "write whose name contains config"
+    },
+    {
+      "name": "putPublicInfo",
+      "method": "POST",
+      "path": "/v2/newbrowser/putPublicInfo",
+      "expect": "blocked",
+      "why": "write whose name contains info"
+    },
+    {
+      "name": "getcdkey",
+      "method": "POST",
+      "path": "/v2/cost/costmanagement/redeemed",
+      "expect": "blocked",
+      "why": "redeems a card; the client name looks like a read"
+    },
+    {
+      "name": "createNewbieDeviceOrder",
+      "method": "POST",
+      "path": "/v2/cost/device/createNewbieDeviceOrder",
+      "expect": "blocked",
+      "why": "creates a paid order"
+    },
+    {
+      "name": "setShopProxy",
+      "method": "POST",
+      "path": "/v2/newbrowser/setShopProxy",
+      "expect": "blocked",
+      "why": "changes an environment proxy"
+    },
+    {
+      "name": "bindPhoneEmail",
+      "method": "POST",
+      "path": "/v2/sso/auth/bind",
+      "expect": "blocked",
+      "why": "identity binding"
+    },
+    {
+      "name": "deleteUserPasswordRecycle",
+      "method": "POST",
+      "path": "/v2/newbrowser/deleteUserPasswordRecycle",
+      "expect": "blocked",
+      "why": "purges credentials"
+    },
+    {
+      "name": "retsetshopName",
+      "method": "POST",
+      "path": "/v2/newbrowser/retsetshopName",
+      "expect": "blocked",
+      "why": "renames an environment"
+    },
+    {
+      "name": "updateTag",
+      "method": "POST",
+      "path": "/v2/proxy/device/updateTag",
+      "expect": "blocked",
+      "why": "creates or renames a tag"
+    },
+    {
+      "name": "addRoleAccount",
+      "method": "POST",
+      "path": "/v2/team/role/great",
+      "expect": "blocked",
+      "why": "grants a role"
+    },
+    {
+      "name": "getgroups",
+      "method": "POST",
+      "path": "/v2/newbrowser/getgroups",
+      "expect": "read",
+      "why": "read-shaped POST"
+    },
+    {
+      "name": "getconditionshops",
+      "method": "POST",
+      "path": "/v2/newbrowser/getconditionshops",
+      "expect": "read",
+      "why": "environment list"
+    },
+    {
+      "name": "findTags",
+      "method": "GET",
+      "path": "/v2/proxy/device/findTags",
+      "expect": "read",
+      "why": "tag list"
+    },
+    {
+      "name": "getUserPasswordList",
+      "method": "POST",
+      "path": "/v2/newbrowser/getUserPasswordList",
+      "expect": "read",
+      "why": "credential list"
+    },
+    {
+      "name": "myUserinfo",
+      "method": "POST",
+      "path": "/v2/sso/auth/myUserinfo",
+      "expect": "read",
+      "why": "profile read"
+    },
+    {
+      "name": "getRpaPlanManagementList",
+      "method": "POST",
+      "path": "/v2/rpa/getRpaPlanManagementList",
+      "expect": "read",
+      "why": "RPA plan list"
+    },
+    {
+      "name": "getCookie",
+      "method": "POST",
+      "path": "/v2/newbrowser/getCookie",
+      "expect": "read",
+      "why": "reads the stored cookie string"
+    },
+    {
+      "name": "numVis",
+      "method": "POST",
+      "path": "/v2/newbrowser/cloud-accounts/num-vis",
+      "expect": "read",
+      "why": "cloud-account counter"
+    },
+    {
+      "name": "cloudAccountPopup",
+      "method": "POST",
+      "path": "/v2/newbrowser/cloud-accounts/popup/get",
+      "expect": "read",
+      "why": "cloud-account popup"
+    },
+    {
+      "name": "frozenList",
+      "method": "GET",
+      "path": "/v2/retail/frozenList",
+      "expect": "read",
+      "why": "retail frozen list"
+    },
+    {
+      "name": "getOrderManagementNew",
+      "method": "GET",
+      "path": "/v2/cost/costmanagement/getOrderManagementNew",
+      "expect": "read",
+      "why": "order list"
+    },
+    {
+      "name": "getCloudBrowserProducts",
+      "method": "GET",
+      "path": "/v2/proxy/device/getCloudBrowserProducts",
+      "expect": "read",
+      "why": "cloud product catalogue"
+    },
+    {
+      "name": "findDeviceDynamicProxies",
+      "method": "GET",
+      "path": "/v2/proxy/device/findDeviceDynamicProxies",
+      "expect": "read",
+      "why": "dynamic proxy list"
+    },
+    {
+      "name": "getbatchaddxlsxprocess",
+      "method": "POST",
+      "path": "/v2/newbrowser/getbatchaddxlsxprocess",
+      "expect": "read",
+      "why": "import progress read"
+    },
+    {
+      "name": "getUserCompanyInviteList",
+      "method": "GET",
+      "path": "/v2/retail/getUserCompanyInviteList",
+      "expect": "read",
+      "why": "GET whose name contains the write verb invite; the read prefix must win"
+    }
+  ]
+}

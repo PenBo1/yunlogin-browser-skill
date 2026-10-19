@@ -115,3 +115,9 @@ Failures arrive as HTTP 200 with a non-200 business code. Read [ERRORS.md](../ER
 - Delete a tag with `proxy-tag-delete`. Deleting a tag removes it from any environment that used it.
 - Creating a tag with an empty body returns `code: 200` and stores a tag with no name. Always send a label.
 - A duplicate label returns `code: 4020` with a localized already-exists message.
+
+## See Also
+
+- [RESPONSE_SHAPES.md](../RESPONSE_SHAPES.md) - envelope, key-name, and type traps across the surface.
+- [WRITE_ROUNDTRIPS.md](../WRITE_ROUNDTRIPS.md) - verified write round trips and silent-failure notes.
+- [ERRORS.md](../ERRORS.md) - HTTP vs business code contract.

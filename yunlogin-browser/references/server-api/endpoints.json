@@ -1,7 +1,7 @@
 {
   "surface": "server",
   "default_origin": "https://d126447d359e70c0.yunlogin.com",
-  "tested_at": "2026-09-24",
+  "tested_at": "2026-10-09",
   "auth": {
     "header": "Authorization",
     "scheme": "Bearer",
@@ -442,7 +442,10 @@
         "page": 1,
         "pageSize": 10,
         "name": "",
-        "groupid": ""
+        "groupid": "",
+        "browserid": [],
+        "userid": "",
+        "number": 0
       },
       "body_required": [],
       "redact_keys": [
@@ -799,7 +802,7 @@
     },
     {
       "id": "current-company-info",
-      "method": "GET",
+      "method": "POST",
       "path": "/v2/team/curCompanyInfo",
       "document": "endpoints/current-company-info.md",
       "query_defaults": {},
@@ -813,10 +816,7 @@
         "proxyp",
         "cookie"
       ],
-      "tested": {
-        "http_status": 404,
-        "code": null
-      }
+      "tested": { "http_status": 200, "code": 200 }
     },
     {
       "id": "user-meal-settings",
@@ -945,16 +945,13 @@
     },
     {
       "id": "team-authentication-get",
-      "method": "POST",
+      "method": "GET",
       "path": "/v2/team/authentication/get",
       "document": "endpoints/team-authentication-get.md",
       "body_defaults": {},
       "body_required": [],
       "redact_keys": [],
-      "tested": {
-        "http_status": 404,
-        "code": null
-      }
+      "tested": { "http_status": 200, "code": 200 }
     },
     {
       "id": "my-companies",
@@ -1022,7 +1019,7 @@
     },
     {
       "id": "company-user-devices",
-      "method": "GET",
+      "method": "POST",
       "path": "/v2/team/company/user/devices",
       "document": "endpoints/company-user-devices.md",
       "query_defaults": {},
@@ -1036,10 +1033,7 @@
         "proxyp",
         "cookie"
       ],
-      "tested": {
-        "http_status": 404,
-        "code": null
-      }
+      "tested": { "http_status": 200, "code": 200 }
     },
     {
       "id": "settings-contact",
@@ -1188,6 +1182,42 @@
       "body_required": [],
       "redact_keys": [
         "token"
+      ],
+      "tested": {
+        "http_status": 200,
+        "code": 200
+      }
+    },
+    {
+      "id": "sso-login",
+      "method": "POST",
+      "path": "/v2/sso/login",
+      "document": "endpoints/sso-login.md",
+      "requires_auth": false,
+      "header_defaults": {
+        "apisource": "1",
+        "origin": "chrome-extension://iginhnpfilcejkhoifnjlhmcgoifmkao",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36"
+      },
+      "body_defaults": {
+        "username": "",
+        "password": "",
+        "code": "",
+        "os": "windows",
+        "source": "112",
+        "last_login_port": "client",
+        "last_login_device": "pc",
+        "cl": ""
+      },
+      "body_required": [
+        "username",
+        "password"
+      ],
+      "redact_keys": [
+        "password",
+        "token",
+        "username",
+        "user_name"
       ],
       "tested": {
         "http_status": 200,

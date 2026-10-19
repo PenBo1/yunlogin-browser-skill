@@ -23,8 +23,8 @@
  *   POST /api/v2/userapi/user/create      create fallback
  *   POST /api/v2/userapi/user/shopseriallist list fallback
  *   POST /api/v2/userapi/user/delete      delete fallback
- *   POST /api/v1/client/gpu_info          local GPU facts (port 52446)
- *   POST /api/v1/client/clean_env         clear local environment data (port 52446)
+ *   POST /api/v1/client/gpu_info          local GPU facts (discovered port)
+ *   POST /api/v1/client/clean_env         clear local environment data (discovered port)
  *
  * See references/workflows/environment-lifecycle.md for the operator guidance.
  */
@@ -33,14 +33,15 @@ import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveClientOrigin } from "./lib/client-origin.mjs";
 import { readLocalToken, readServerIdentity, readServerToken } from "./lib/local-token-store.mjs";
-import { ensureFreshServerSession } from "./lib/server-token.mjs";
+import { readWorkbenchSession } from "./lib/workbench-cache.mjs";
+import { assertWorkbenchIdentity, syncWorkbench } from "./lib/workbench-session.mjs";
 import { DEFAULT_TAG_COLOR, colorName, describeTagColor, resolveTagColor } from "./lib/tag-colors.mjs";
 import { captureLocalToken } from "./yunlogin-cdp.mjs";
 
 const DEFAULT_SERVER_ORIGIN = "https://d126447d359e70c0.yunlogin.com";
 const DEFAULT_LOCAL_ORIGIN = "http://localhost:50213";
-const DEFAULT_CLIENT_ORIGIN = "http://127.0.0.1:52446";
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_KERNEL = "Chrome";
 const DEFAULT_KERNEL_VERSION = "141";
@@ -89,7 +90,7 @@ Commands:
   tag-list         List environment tags.
   tag-create       Create a tag, or rename one when --label-id is supplied.
   tag-delete       Delete tags.
-  clean-env        Clear the local data of one environment through the port 52446 client service.
+  clean-env        Clear the local data of one environment through the discovered local client service.
   bootstrap-token  Capture the local API token, creating a temporary environment when needed.
 
 Options:
@@ -122,23 +123,15 @@ Options:
   -h, --help                  Show this help.
 
 Environment:
-  YUNLOGIN_SERVER_TOKEN       Server token override; otherwise the user-level cache is used.
-  YUNLOGIN_SERVER_TOKEN_FILE  Server token cache path override.
-  YUNLOGIN_SERVER_ORIGIN      Server origin override.
-  YUNLOGIN_SERVER_COMPANY_ID  Default companyid for server calls.
-  YUNLOGIN_SERVER_USER_ID     Default userid for server calls.
-  YUNLOGIN_SERVER_COMPANY     Default company display name for server calls.
-  YUNLOGIN_LOCAL_BASE_URL     Local v2 origin override (loopback only).
-  YUNLOGIN_CLIENT_BASE_URL    Local v1 client origin override (loopback only).
-  YUNLOGIN_LOCAL_TOKEN        Local bearer token override.
-  YUNLOGIN_LOCAL_TOKEN_FILE   Local token cache path override.
+  Live commands synchronize the current Workbench tokens and account context.
+  Legacy token, Cookie, and identity environment overrides are not accepted.
 
 Examples:
   node scripts/yunlogin-env.mjs list --name demo
   node scripts/yunlogin-env.mjs create --name demo --dry-run
   node scripts/yunlogin-env.mjs create --name demo --group Demo --label prod --notes "created by skill" --confirm-attributes
   node scripts/yunlogin-env.mjs delete --account-id <account id> --confirm-delete
-  node scripts/yunlogin-env.mjs bootstrap-token --create-if-missing`);
+  node scripts/yunlogin-auth.mjs sync-workbench`);
 }
 
 function takeValue(args, index, option) {
@@ -253,20 +246,21 @@ function localOrigin() {
   return loopbackOrigin(process.env.YUNLOGIN_LOCAL_BASE_URL ?? process.env.YUNLOGIN_BASE_URL, "YUNLOGIN_LOCAL_BASE_URL", DEFAULT_LOCAL_ORIGIN);
 }
 
-function clientOrigin() {
-  return loopbackOrigin(process.env.YUNLOGIN_CLIENT_BASE_URL, "YUNLOGIN_CLIENT_BASE_URL", DEFAULT_CLIENT_ORIGIN);
+// The client helper port is not fixed; discovery probes the documented
+// current loopback ports owned by the desktop process.
+async function clientOrigin() {
+  return resolveClientOrigin();
 }
 
 async function serverToken() {
   const token = await readServerToken();
   if (!token) {
-    throw new Error("No server token is available. Set YUNLOGIN_SERVER_TOKEN or run: node scripts/yunlogin-auth.mjs save-server-token");
+    throw new Error("No verified Workbench session is available. Run yunlogin-auth.mjs sync-workbench.");
   }
   return token;
 }
 
-// The company and user come from the environment first and from the cached
-// server session next, so a saved session removes the need for env vars.
+// Identity comes from the Workbench snapshot pinned for this operation.
 async function serverIdentityValues() {
   const identity = await readServerIdentity();
   return { companyid: identity.companyId ?? "", userid: identity.userId ?? "", company: identity.company ?? "" };
@@ -294,43 +288,33 @@ async function requestJson(base, requestPath, options = {}) {
 }
 
 async function serverRequest(requestPath, options = {}) {
+  if ((options.method ?? "GET") !== "GET") await assertWorkbenchIdentity(await readWorkbenchSession());
   const send = async () =>
     requestJson(serverOrigin(), requestPath, {
       ...options,
       headers: {
-        authorization: `Bearer ${await serverToken()}`,
+        authorization: await serverToken(),
         lang: process.env.YUNLOGIN_SERVER_LANG ?? "zh",
         "pay-lang": process.env.YUNLOGIN_SERVER_PAY_LANG ?? "zh-TW",
         ...(options.headers ?? {}),
       },
     });
 
-  // Keep the cached session warm before the call. A refresh failure must not
-  // block a request that may still succeed with the cached token.
-  try {
-    await ensureFreshServerSession({ verify: false });
-  } catch {
-    // Ignore; the request below reports the real server answer.
-  }
-
-  let result = await send();
-  if (result.payload?.code === 1001) {
-    const refreshed = await ensureFreshServerSession({ force: true, verify: false }).catch(() => ({ refreshed: false }));
-    if (refreshed.refreshed) result = await send();
-  }
-  return result;
+  return send();
 }
 
 async function localRequest(requestPath, options = {}) {
+  if ((options.method ?? "GET") !== "GET") await assertWorkbenchIdentity(await readWorkbenchSession());
   const token = await readLocalToken();
   const headers = { ...(options.headers ?? {}) };
   if (token) headers.authorization = `Bearer ${token}`;
-  if (process.env.YUNLOGIN_LOCAL_COOKIE) headers.cookie = process.env.YUNLOGIN_LOCAL_COOKIE;
-  return requestJson(localOrigin(), requestPath, { ...options, headers });
+  const origin = (await readWorkbenchSession())?.localOrigin;
+  if (!origin) throw new Error("No verified Workbench local API origin is available.");
+  return requestJson(origin, requestPath, { ...options, headers });
 }
 
 async function clientRequest(requestPath, options = {}) {
-  return requestJson(clientOrigin(), requestPath, options);
+  return requestJson(await clientOrigin(), requestPath, options);
 }
 
 function normalizeServerShops(payload) {
@@ -371,7 +355,7 @@ export async function listEnvironments(options = {}) {
   if (transport !== "local") {
     const { companyid, userid } = await serverIdentityValues();
     if (!companyid || !userid) {
-      attempts.push({ transport: "server", error: "The server transport needs a company and user. Run node scripts/yunlogin-auth.mjs save-server-token, or set YUNLOGIN_SERVER_COMPANY_ID and YUNLOGIN_SERVER_USER_ID." });
+      attempts.push({ transport: "server", error: "The server transport needs a verified Workbench user and company. Run yunlogin-auth.mjs sync-workbench." });
     } else {
       try {
         const response = await serverRequest(SERVER_LIST_PATH, { method: "POST", body: serverListBody(options, companyid, userid) });
@@ -764,7 +748,7 @@ export async function deleteEnvironment(accountId, options = {}) {
         attempts.push({ transport: "server", error: error.message });
       }
     } else {
-      attempts.push({ transport: "server", error: "The server transport needs a company and user. Run node scripts/yunlogin-auth.mjs save-server-token, or set YUNLOGIN_SERVER_COMPANY_ID and YUNLOGIN_SERVER_USER_ID." });
+      attempts.push({ transport: "server", error: "The server transport needs a verified Workbench user and company. Run yunlogin-auth.mjs sync-workbench." });
     }
     if (transport === "server") throw new Error(`Server delete failed: ${attempts.at(-1).error}`);
   }
@@ -790,6 +774,7 @@ export async function cleanEnvironment(accountId, options = {}) {
 }
 
 export async function bootstrapToken(options = {}) {
+  throw new Error("Temporary-environment token bootstrap is disabled in Workbench mode. Run sync-workbench.");
   let environment;
   let created = false;
   if (options.accountId) {
@@ -868,6 +853,28 @@ function confirmationRequired(command, detail) {
 
 async function main() {
   const { command, options } = parseArguments(process.argv.slice(2));
+  if (command === "bootstrap-token") throw new Error("Temporary-environment token capture is disabled in Workbench mode. Use yunlogin-auth.mjs sync-workbench.");
+  if (!options.dryRun) {
+    for (const [name, id, approved] of [
+      ["delete", options.accountId, options.confirmDelete],
+      ["group-delete", options.groupId, options.confirmDelete],
+      ["tag-delete", options.labelId, options.confirmDelete],
+      ["clean-env", options.accountId, options.confirmClean],
+    ]) {
+      if (command === name && id && !approved) { confirmationRequired(name, { targetId: id }); return; }
+    }
+    if (command === "create") {
+      const attributes = options.notes !== undefined || options.labels.length > 0 || options.group !== undefined;
+      if (attributes && !options.confirmAttributes) {
+        confirmationRequired("create", { requested: { name: options.name, notes: options.notes, labels: options.labels, group: options.group } }); return;
+      }
+      if (!attributes && !options.acceptDefaults) {
+        console.log(JSON.stringify({ command, needsAttributes: true, name: options.name, availableGroups: [], availableTags: [], message: "Ask for group, remark, and tags, then sync Workbench before resolving current options and creating." }, null, 2));
+        process.exitCode = 2; return;
+      }
+    }
+  }
+  if (!options.dryRun) await syncWorkbench();
 
   if (command === "list") {
     const result = await listEnvironments(options);

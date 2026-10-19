@@ -1,18 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Token setup and refresh for the YunLogin skill.
- *
- * Two credentials exist and they are not interchangeable:
- *   local  - grants the loopback desktop API, captured from the bundled
- *            browser extension, refreshable without user input.
- *   server - grants the management-center HTTPS API, supplied by the user
- *            once and then cached in the user profile.
- *
- * Both live outside the skill in %LOCALAPPDATA%\yunlogin-browser\ on Windows
- * and ~/.local/share/yunlogin-browser/ elsewhere.
- *
- * See references/workflows/token-lifecycle.md for the full resolution and refresh rules.
+ * Read the current Workbench management page credential and maintain one
+ * verified user-level session. See references/workflows/token-lifecycle.md.
  */
 
 import { readFile } from "node:fs/promises";
@@ -33,59 +23,35 @@ import {
   refreshServerToken as refreshServerSession,
   serverSessionStatus,
 } from "./lib/server-token.mjs";
+import { syncWorkbench, workbenchStatus } from "./lib/workbench-session.mjs";
 
 const DEFAULT_LOCAL_ORIGIN = "http://localhost:50213";
 const DEFAULT_SERVER_ORIGIN = "https://d126447d359e70c0.yunlogin.com";
 const LOCAL_PROBE_PATH = "/api/v2/userapi/user/shopseriallist";
 const SERVER_PROBE_PATH = "/v2/sso/auth/myUserinfo";
 const SERVER_COMPANIES_PATH = "/v2/team/myCompanies";
+const SERVER_LOGIN_PATH = "/v2/sso/login";
+const SERVER_LOGIN_ORIGIN = "chrome-extension://iginhnpfilcejkhoifnjlhmcgoifmkao";
+const SERVER_LOGIN_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36";
 const DEFAULT_TIMEOUT_MS = 30000;
 
 function usage() {
   console.error(`Usage:
   node scripts/yunlogin-auth.mjs status
-  node scripts/yunlogin-auth.mjs save-server-token [--token-file FILE] [--company-id ID] [--user-id ID]
-  node scripts/yunlogin-auth.mjs ensure-server
-  node scripts/yunlogin-auth.mjs refresh-server-token
-  node scripts/yunlogin-auth.mjs ensure-local [--confirm-create] [--account-id ID]
-  node scripts/yunlogin-auth.mjs clear-server-token
-  node scripts/yunlogin-auth.mjs clear-local-token --confirm-clear
+  node scripts/yunlogin-auth.mjs sync-workbench [--dry-run]
+  node scripts/yunlogin-auth.mjs ensure-server [--dry-run]
 
 Commands:
-  status             Verify both tokens and print where each one is stored.
-  save-server-token  Verify a server token and cache it with its company and user context.
-  ensure-server      Verify the cached server token; refresh it when it is close to expiry, and drop it when the server rejects it.
-  refresh-server-token Force a tokenRefresh call and store the new token with its expiry.
-  ensure-local       Verify the cached local token; capture a new one when the local API rejects it.
-  clear-server-token Delete the cached server token.
-  clear-local-token  Delete the cached local token. Requires --confirm-clear.
-
-Options:
-  --token-file FILE   Read the server token from FILE instead of YUNLOGIN_SERVER_TOKEN.
-  --company-id ID     Company for the server session. Required when the account has several companies.
-  --user-id ID        User for the server session. Resolved automatically when omitted.
-  --account-id ID     Environment used when ensure-local must capture a new token.
-  --confirm-create    Allow ensure-local to create a temporary environment.
-  --confirm-clear     Confirm deleting a cached token.
-  --timeout-ms MS     Request timeout (default: ${DEFAULT_TIMEOUT_MS}).
-  --dry-run           Print the planned action without sending it.
-  -h, --help          Show this help.
-
-Environment:
-  YUNLOGIN_LOCAL_TOKEN        Local token override.
-  YUNLOGIN_LOCAL_TOKEN_FILE   Local token cache path.
-  YUNLOGIN_SERVER_TOKEN       Server token override.
-  YUNLOGIN_SERVER_TOKEN_FILE  Server token cache path.
-  YUNLOGIN_SERVER_COMPANY_ID  Company override for identity resolution.
-  YUNLOGIN_SERVER_USER_ID     User override for identity resolution.
-  YUNLOGIN_LOCAL_BASE_URL     Local origin override (loopback only).
-  YUNLOGIN_SERVER_ORIGIN      Server origin override (https only).
-  YUNLOGIN_SERVER_REFRESH_SKEW_MS  Refresh when less than this remains (default 86400000).
+  status            Compare live Workbench state with the active cache without writing.
+  sync-workbench    Read the active Workbench session and atomically synchronize the credential cache.
+  ensure-server     Synchronize both current Workbench credentials before use.
+  Independent login, import, refresh, and legacy cache-clearing commands are
+  disabled in Workbench mode. Remove legacy token/Cookie/identity overrides.
 
 Examples:
   node scripts/yunlogin-auth.mjs status
-  node scripts/yunlogin-auth.mjs save-server-token
-  node scripts/yunlogin-auth.mjs ensure-local --confirm-create`);
+  node scripts/yunlogin-auth.mjs sync-workbench --dry-run
+  node scripts/yunlogin-auth.mjs sync-workbench`);
 }
 
 function takeValue(args, index, option) {
@@ -106,6 +72,14 @@ function parseArguments(argv) {
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--token-file") { options.tokenFile = takeValue(args, index, argument); index += 1; }
+    else if (argument === "--username") { options.username = takeValue(args, index, argument); index += 1; }
+    else if (argument === "--password-file") { options.passwordFile = takeValue(args, index, argument); index += 1; }
+    else if (argument === "--code") { options.code = takeValue(args, index, argument); index += 1; }
+    else if (argument === "--os") { options.os = takeValue(args, index, argument); index += 1; }
+    else if (argument === "--source") { options.source = takeValue(args, index, argument); index += 1; }
+    else if (argument === "--last-login-port") { options.lastLoginPort = takeValue(args, index, argument); index += 1; }
+    else if (argument === "--last-login-device") { options.lastLoginDevice = takeValue(args, index, argument); index += 1; }
+    else if (argument === "--cl") { options.cl = takeValue(args, index, argument); index += 1; }
     else if (argument === "--company-id") { options.companyId = takeValue(args, index, argument); index += 1; }
     else if (argument === "--user-id") { options.userId = takeValue(args, index, argument); index += 1; }
     else if (argument === "--account-id") { options.accountId = takeValue(args, index, argument); index += 1; }
@@ -142,7 +116,7 @@ function httpsOrigin(variable, fallback) {
 
 async function requestJson(origin, requestPath, options = {}) {
   const headers = { accept: "application/json, text/plain, */*", ...(options.headers ?? {}) };
-  if (options.body !== undefined) headers["content-type"] = "application/json";
+  if (options.body !== undefined && !headers["content-type"]) headers["content-type"] = "application/json";
   const response = await fetch(new URL(requestPath, `${origin}/`), {
     method: options.method ?? "GET",
     headers,
@@ -215,6 +189,102 @@ async function listCompanies(token, options) {
   return list.map((company) => ({ companyId: company.companyId, name: company.name }));
 }
 
+function redactLoginBody(body) {
+  return {
+    ...body,
+    username: "[REDACTED]",
+    password: "[REDACTED]",
+    code: body.code ? "[REDACTED]" : "",
+  };
+}
+
+function redactLoginHeaders(headers) {
+  return Object.fromEntries(
+    Object.entries(headers).map(([name, value]) => [
+      name,
+      ["cookie", "appinfo", "authorization"].includes(name.toLowerCase()) ? "[SET]" : value,
+    ]),
+  );
+}
+
+async function resolveLoginBody(options) {
+  const username = options.username ?? process.env.YUNLOGIN_LOGIN_USERNAME;
+  if (!username) throw new Error("Login username is required. Set YUNLOGIN_LOGIN_USERNAME or pass --username.");
+  let password = process.env.YUNLOGIN_LOGIN_PASSWORD;
+  if (!password && options.passwordFile) {
+    const raw = await readFile(options.passwordFile, "utf8");
+    password = raw.trim();
+  }
+  if (!password) throw new Error("Login password is required. Set YUNLOGIN_LOGIN_PASSWORD or pass --password-file.");
+  return {
+    username,
+    password,
+    code: options.code ?? process.env.YUNLOGIN_LOGIN_CODE ?? "",
+    os: options.os ?? process.env.YUNLOGIN_LOGIN_OS ?? "windows",
+    source: options.source ?? process.env.YUNLOGIN_LOGIN_SOURCE ?? "112",
+    last_login_port: options.lastLoginPort ?? process.env.YUNLOGIN_LOGIN_LAST_LOGIN_PORT ?? "client",
+    last_login_device: options.lastLoginDevice ?? process.env.YUNLOGIN_LOGIN_LAST_LOGIN_DEVICE ?? "pc",
+    cl: options.cl ?? process.env.YUNLOGIN_LOGIN_CL ?? "",
+  };
+}
+
+export async function loginServer(options = {}) {
+  throw new Error("Independent login is disabled in Workbench mode. Sign in through Workbench and run sync-workbench.");
+  const origin = httpsOrigin("YUNLOGIN_SERVER_ORIGIN", DEFAULT_SERVER_ORIGIN);
+  const body = await resolveLoginBody(options);
+  const headers = {
+    accept: "application/json, text/plain, */*",
+    "content-type": "application/json;charset=UTF-8",
+    apisource: process.env.YUNLOGIN_SERVER_APISOURCE ?? "1",
+    origin: process.env.YUNLOGIN_LOGIN_ORIGIN ?? SERVER_LOGIN_ORIGIN,
+    "user-agent": process.env.YUNLOGIN_SERVER_USER_AGENT ?? SERVER_LOGIN_USER_AGENT,
+  };
+  if (process.env.YUNLOGIN_SERVER_APPINFO) headers.appinfo = process.env.YUNLOGIN_SERVER_APPINFO;
+  if (process.env.YUNLOGIN_SERVER_COOKIE) headers.cookie = process.env.YUNLOGIN_SERVER_COOKIE;
+  const url = new URL(SERVER_LOGIN_PATH, `${origin}/`).href;
+  if (options.dryRun) {
+    return {
+      loggedIn: false,
+      dryRun: true,
+      endpoint: "POST /v2/sso/login",
+      url,
+      headers: redactLoginHeaders(headers),
+      body: redactLoginBody(body),
+    };
+  }
+  const response = await requestJson(origin, SERVER_LOGIN_PATH, {
+    method: "POST",
+    body,
+    headers,
+    timeoutMs: options.timeoutMs,
+  });
+  const payload = response.payload;
+  const token = payload?.data?.token;
+  if (payload?.code !== 200 || typeof token !== "string" || !token) {
+    return {
+      loggedIn: false,
+      httpStatus: response.status,
+      code: payload?.code,
+      msg: payload?.msg,
+      reason: response.ok ? "the login response did not contain a usable token" : `HTTP ${response.status}`,
+    };
+  }
+  const session = await saveServerToken({ ...options, tokenValue: token, dryRun: false });
+  return {
+    loggedIn: true,
+    httpStatus: response.status,
+    code: payload.code,
+    msg: payload.msg,
+    tokenLength: token.length,
+    openId: payload.data?.openId,
+    expire: payload.data?.expire,
+    need: payload.data?.need,
+    source: payload.data?.source,
+    sessionSaved: session.saved === true,
+    needsCompany: session.needsCompany === true,
+    session,
+  };
+}
 async function resolveTokenValue(options) {
   if (typeof options.tokenValue === "string" && options.tokenValue) return options.tokenValue;
   if (options.tokenFile) {
@@ -238,6 +308,7 @@ async function resolveTokenValue(options) {
 }
 
 export async function saveServerToken(options = {}) {
+  throw new Error("Independent token import is disabled in Workbench mode. Run sync-workbench.");
   const token = await resolveTokenValue(options);
   const probe = await probeServerToken(token, options);
   if (!probe.usable) {
@@ -282,6 +353,7 @@ export async function saveServerToken(options = {}) {
 }
 
 export async function ensureServerToken(options = {}) {
+  return options.dryRun ? { dryRun: true, wouldSyncWorkbench: true } : syncWorkbench();
   const status = await serverSessionStatus(options);
   if (!status.present) {
     return { usable: false, cached: false, needsNewToken: true, reason: "no server token is stored" };
@@ -289,7 +361,9 @@ export async function ensureServerToken(options = {}) {
 
   let refreshed = false;
   let refreshNote;
-  if (status.dueForRefresh || options.forceRefresh) {
+  // A dry run only reports state. Refreshing here would rewrite the user's token cache, so a
+  // verification command such as "status" must pass dryRun and never mutate the cache.
+  if ((status.dueForRefresh && !options.dryRun) || options.forceRefresh) {
     const result = await refreshServerSession({ ...options, token: await readServerToken() });
     refreshed = result.refreshed;
     if (!result.refreshed) refreshNote = result.reason;
@@ -354,6 +428,7 @@ export async function ensureServerToken(options = {}) {
 }
 
 export async function ensureLocalToken(options = {}) {
+  throw new Error("Local API token management is outside the Workbench management-session workflow.");
   const cached = await readLocalToken();
   if (cached) {
     const probe = await probeLocalToken(cached, options);
@@ -388,6 +463,22 @@ export async function ensureLocalToken(options = {}) {
 
 async function main() {
   const { command, options } = parseArguments(process.argv.slice(2));
+  if (command === "status") {
+    console.log(JSON.stringify({ command, ...(await workbenchStatus()) }, null, 2));
+    return;
+  }
+  if (["sync-workbench", "ensure-server"].includes(command)) {
+    if (options.dryRun) {
+      console.log(JSON.stringify({ command, dryRun: true, wouldRead: ["Workbench management page", "Workbench extension", "current identity"], wouldWrite: "user-level workbench-session.json" }, null, 2));
+      return;
+    }
+    console.log(JSON.stringify({ command, ...(await syncWorkbench()) }, null, 2));
+    return;
+  }
+  if (["ensure-local", "save-server-token", "login", "refresh-server-token", "clear-server-token", "clear-local-token"].includes(command)) {
+    throw new Error("This command manages an independent credential and is disabled in Workbench mode. Sign in or renew in Workbench, then run sync-workbench.");
+  }
+  throw new Error(`Unknown command: ${command}`);
   const resolvedTimeout = timeoutMs(options);
   const context = { ...options, timeoutMs: resolvedTimeout };
 
@@ -421,6 +512,14 @@ async function main() {
 
   if (command === "save-server-token") {
     console.log(JSON.stringify({ command, ...(await saveServerToken(context)) }, null, 2));
+    return;
+  }
+
+  if (command === "login") {
+    const result = await loginServer(context);
+    console.log(JSON.stringify({ command, ...result }, null, 2));
+    if (!result.dryRun && !result.loggedIn) process.exitCode = 1;
+    else if (result.sessionSaved === false) process.exitCode = result.needsCompany ? 2 : 1;
     return;
   }
 

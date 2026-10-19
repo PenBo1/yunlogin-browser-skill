@@ -1,6 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { readWorkbenchSession, sessionPath } from "./workbench-cache.mjs";
 
 const CACHE_DIR_NAME = "yunlogin-browser";
 const LOCAL_TOKEN_FILE_NAME = "local-token.json";
@@ -65,15 +66,11 @@ export function resolveTokenCacheDir() {
 }
 
 export async function readLocalToken() {
-  if (process.env.YUNLOGIN_LOCAL_TOKEN) return process.env.YUNLOGIN_LOCAL_TOKEN;
-  const payload = await readJsonFile(resolveLocalTokenFilePath());
-  const token = typeof payload === "string" ? payload : payload?.token;
-  return typeof token === "string" && token ? token : undefined;
+  return undefined;
 }
 
 export async function writeLocalToken(token, filePath = resolveLocalTokenFilePath()) {
-  if (!token) throw new Error("Cannot write an empty local token");
-  return writeSecret(filePath, { token, captured_at: new Date().toISOString() });
+  throw new Error("Local credentials are managed by the current Workbench session. Run yunlogin-auth.mjs sync-workbench.");
 }
 
 export async function clearLocalToken(filePath = resolveLocalTokenFilePath()) {
@@ -89,30 +86,20 @@ export async function clearLocalToken(filePath = resolveLocalTokenFilePath()) {
 // context that most management-center routes require, so a customer configures
 // the session once instead of exporting three variables.
 export async function readServerSession() {
-  const payload = await readJsonFile(resolveServerTokenFilePath());
-  if (!payload || typeof payload !== "object") return {};
-  const token = typeof payload.token === "string" && payload.token ? payload.token : undefined;
-  const storedMs = Number(payload.expires_at_ms);
-  const parsedMs = typeof payload.expires_at === "string" ? Date.parse(payload.expires_at) : NaN;
-  const expiresAtMs = Number.isFinite(storedMs)
-    ? storedMs
-    : Number.isFinite(parsedMs)
-      ? parsedMs
-      : jwtExpiryMs(token);
+  const payload = await readWorkbenchSession();
+  if (!payload) return {};
   return {
-    token,
-    companyId: typeof payload.company_id === "string" && payload.company_id ? payload.company_id : undefined,
-    userId: typeof payload.user_id === "string" && payload.user_id ? payload.user_id : undefined,
-    company: typeof payload.company === "string" && payload.company ? payload.company : undefined,
-    expiresAt: typeof payload.expires_at === "string" ? payload.expires_at : undefined,
-    expiresAtMs,
-    refreshedAt: typeof payload.refreshed_at === "string" ? payload.refreshed_at : undefined,
-    capturedAt: typeof payload.captured_at === "string" ? payload.captured_at : undefined,
+    token: payload.serverToken,
+    companyId: payload.companyId,
+    userId: payload.userId,
+    company: payload.company,
+    expiresAt: Number.isFinite(payload.serverExpiresAtMs) ? new Date(payload.serverExpiresAtMs).toISOString() : undefined,
+    expiresAtMs: payload.serverExpiresAtMs ?? undefined,
+    capturedAt: payload.capturedAt,
   };
 }
 
 export async function readServerToken() {
-  if (process.env.YUNLOGIN_SERVER_TOKEN) return process.env.YUNLOGIN_SERVER_TOKEN;
   const session = await readServerSession();
   return session.token;
 }
@@ -120,25 +107,14 @@ export async function readServerToken() {
 export async function readServerIdentity() {
   const session = await readServerSession();
   return {
-    companyId: process.env.YUNLOGIN_SERVER_COMPANY_ID ?? session.companyId,
-    userId: process.env.YUNLOGIN_SERVER_USER_ID ?? session.userId,
-    company: process.env.YUNLOGIN_SERVER_COMPANY ?? session.company,
+    companyId: session.companyId,
+    userId: session.userId,
+    company: session.company,
   };
 }
 
 export async function writeServerSession(payload, filePath = resolveServerTokenFilePath()) {
-  if (!payload?.token) throw new Error("Cannot write a server session without a token");
-  const record = { token: payload.token, captured_at: new Date().toISOString() };
-  const expiresAtMs = Number.isFinite(payload.expiresAtMs) ? payload.expiresAtMs : jwtExpiryMs(payload.token);
-  if (Number.isFinite(expiresAtMs)) {
-    record.expires_at_ms = expiresAtMs;
-    record.expires_at = typeof payload.expiresAt === "string" ? payload.expiresAt : new Date(expiresAtMs).toISOString();
-  }
-  if (typeof payload.refreshedAt === "string" && payload.refreshedAt) record.refreshed_at = payload.refreshedAt;
-  for (const [key, value] of [["company_id", payload.companyId], ["user_id", payload.userId], ["company", payload.company]]) {
-    if (typeof value === "string" && value) record[key] = value;
-  }
-  return writeSecret(filePath, record);
+  throw new Error("Server credentials are managed by the current Workbench session. Run yunlogin-auth.mjs sync-workbench.");
 }
 
 export async function writeServerToken(token, filePath = resolveServerTokenFilePath()) {

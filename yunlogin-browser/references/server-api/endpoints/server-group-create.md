@@ -98,3 +98,9 @@ Failures arrive as HTTP 200 with a non-200 business code. Read [ERRORS.md](../ER
 ## Notes
 
 Read the group list with `server-group-list`. Delete a group with `server-group-delete`, which removes the group but not the environments inside it.
+
+## See Also
+
+- [RESPONSE_SHAPES.md](../RESPONSE_SHAPES.md) - envelope, key-name, and type traps across the surface.
+- [WRITE_ROUNDTRIPS.md](../WRITE_ROUNDTRIPS.md) - verified write round trips and silent-failure notes.
+- [ERRORS.md](../ERRORS.md) - HTTP vs business code contract.

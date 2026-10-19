@@ -96,6 +96,7 @@ export async function probeServerToken(token, options = {}) {
 // tokenRefresh answers with a fresh bearer token and the moment it expires.
 // The expire field matches the JWT exp claim exactly on the tested server.
 export async function refreshServerToken(options = {}) {
+  throw new Error("Independent tokenRefresh is disabled in Workbench mode. Renew in Workbench, then run sync-workbench.");
   const requestedToken = options.token;
   if (!requestedToken) {
     return { refreshed: false, reason: "no bearer token is available to refresh" };
@@ -172,6 +173,7 @@ export async function serverSessionStatus(options = {}) {
 // the skew window. A successful refresh replaces the cache; a failure leaves
 // the existing token in place so the caller can still try it.
 export async function ensureFreshServerSession(options = {}) {
+  throw new Error("Independent token refresh is disabled in Workbench mode. Use sync-workbench before the operation.");
   const status = await serverSessionStatus(options);
   if (!status.present) return { ...status, refreshed: false };
   if (!status.dueForRefresh && !options.force) return { ...status, refreshed: false };

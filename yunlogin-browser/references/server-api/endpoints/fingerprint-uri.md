@@ -260,3 +260,12 @@ Failures arrive as HTTP 200 with a non-200 business code. Read [ERRORS.md](../ER
 | HTTP 401 | No token was supplied. |
 | HTTP 404 | The route or HTTP method is not served by this deployment. Do not retry. |
 
+
+**Additional accepted request fields** (recognised by the decoder but not in the minimal tested body; see PARAMETER_MATRIX.md batch 32): `name, serial, remark, kernel, kernelVersion, system`.
+
+## See Also
+
+- [RESPONSE_SHAPES.md](../RESPONSE_SHAPES.md) - envelope, key-name, and type traps across the surface.
+- [WRITE_ROUNDTRIPS.md](../WRITE_ROUNDTRIPS.md) - verified write round trips and silent-failure notes.
+- [ERRORS.md](../ERRORS.md) - HTTP vs business code contract.
+

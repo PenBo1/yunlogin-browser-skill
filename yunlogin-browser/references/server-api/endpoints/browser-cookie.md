@@ -83,3 +83,12 @@ Failures arrive as HTTP 200 with a non-200 business code. Read [ERRORS.md](../ER
 - The response can contain session cookies, tokens, and other authentication material.
 - Do not place the raw `data` value in logs, Markdown, source files, command arguments, or chat.
 - The helper redacts `data` by default. `--show-sensitive` is required to return it unchanged.
+
+
+**Additional accepted request fields** (recognised by the decoder but not in the minimal tested body; see PARAMETER_MATRIX.md batch 32): `companyid, companyId, groupid, serial`.
+
+## See Also
+
+- [RESPONSE_SHAPES.md](../RESPONSE_SHAPES.md) - envelope, key-name, and type traps across the surface.
+- [WRITE_ROUNDTRIPS.md](../WRITE_ROUNDTRIPS.md) - verified write round trips and silent-failure notes.
+- [ERRORS.md](../ERRORS.md) - HTTP vs business code contract.

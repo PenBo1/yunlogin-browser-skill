@@ -85,3 +85,9 @@ Failures arrive as HTTP 200 with a non-200 business code. Read [ERRORS.md](../ER
 - The helper lists `data` in `redact_keys`, so the code is replaced with `[REDACTED]` unless `--show-sensitive` is passed.
 - Only read the code when the user asks for it, and never paste it into the skill, a report, or a ticket.
 - `reset: 1` is a mutation that breaks every previously shared invitation link. Require explicit user authorization.
+
+## See Also
+
+- [RESPONSE_SHAPES.md](../RESPONSE_SHAPES.md) - envelope, key-name, and type traps across the surface.
+- [WRITE_ROUNDTRIPS.md](../WRITE_ROUNDTRIPS.md) - verified write round trips and silent-failure notes.
+- [ERRORS.md](../ERRORS.md) - HTTP vs business code contract.

@@ -1,12 +1,12 @@
 ---
 name: yunlogin-browser
-description: Operate YunLogin's local desktop and management-center APIs for browser environments, accounts, cookies, proxies, groups, tags, and tokens. Routes each request to the correct surface; do not use for arbitrary website automation.
+description: Operate YunLogin browser environments and accounts through its local desktop, local client, and management-center APIs. Route each request to the correct surface and read the endpoint contract before sending it. Not for arbitrary website automation.
 license: MIT
 metadata:
   short-description: Manage YunLogin environments, accounts, and proxies by API
   author: PenBo
-  version: 1.0.0
-  updated: 2026-09-24
+  version: 1.1.0
+  updated: 2026-10-19
   repository: https://github.com/PenBo1/yunlogin-browser-skill
 ---
 
@@ -16,11 +16,23 @@ YunLogin exposes three documented surfaces. Decide the target before reading doc
 
 | Surface | Origin | Index |
 | --- | --- | --- |
-| Local API | `http://localhost:50213/api/v2/...` | [references/api/README.md](references/api/README.md) |
-| Local client API | `http://127.0.0.1:52446/api/v1/...` | [references/client-api/README.md](./references/client-api/README.md) |
+| Local API | `http://localhost:50213/api/v2/...` | [references/api/INDEX.md](references/api/INDEX.md) |
+| Local client API | loopback port discovered at runtime | [references/client-api/INDEX.md](./references/client-api/INDEX.md) |
 | Server API | `https://d126447d359e70c0.yunlogin.com/v2/...` | [references/server-api/INDEX.md](references/server-api/INDEX.md) |
 
 Never silently switch surfaces. A path or parameter that works on one surface does not prove it exists on another.
+
+## Client Availability And Startup
+
+Before a local call, check client availability:
+
+```powershell
+node scripts/yunlogin-client.mjs status
+```
+
+Follow [references/client-api/STARTUP.md](./references/client-api/STARTUP.md) for startup consent and installation. Run `node scripts/yunlogin-ports.mjs` for fresh ports; never reuse observed numbers.
+
+The client bundle mixes all three, so a path alone does not prove its target: `/api/v1/client/`, `/api/v1/settings/`, `/api/v1/cores/`, and `/api/v1/ipify/` are **local client-API** paths, and sending one to the server origin answers HTTP 405 or a plain 404. Read [references/server-api/WORKFLOW.md](references/server-api/WORKFLOW.md) for the rest of the routing rule.
 
 ## Invocation And Execution
 
@@ -30,10 +42,11 @@ Never silently switch surfaces. A path or parameter that works on one surface do
 - Use `--dry-run` before the first live call. On server routes this is mandatory, because some create routes accept an empty payload and store a record.
 - A missing token blocks that surface only. Do not fall back to a different surface.
 - If a request could belong to either surface and the user has not said which, ask.
+- Write any generated artifact outside this skill folder, and only where the user asks. Never write into the skill directory.
 
 ## API Navigation
 
-Full map: [references/INDEX.md](references/INDEX.md). Server route list: [references/server-api/INDEX.md](references/server-api/INDEX.md).
+Full map: [references/INDEX.md](references/INDEX.md). Server route list: [references/server-api/INDEX.md](references/server-api/INDEX.md). What was tested and what was not: [references/server-api/COVERAGE.md](references/server-api/COVERAGE.md).
 
 **Split the work by surface: query with the server API, launch with the local API.**
 
@@ -42,8 +55,8 @@ Full map: [references/INDEX.md](references/INDEX.md). Server route list: [refere
 | Read or search account data: environments, proxies, accounts, team, plans, notices | Server | [references/server-api/INDEX.md](references/server-api/INDEX.md) |
 | Create, clone, delete, group, or tag an environment | Server | `environment-create`, `environment-clone`, `environment-delete` |
 | **Start, stop, or check an environment browser** | **Local** | `POST /api/v2/browser/start`, `GET /api/v2/browser/status`, `GET /api/v2/browser/stop` |
-| Inject or clear environment Cookies | Local | [references/api/README.md](references/api/README.md) |
-| Read GPU facts or clear local environment data | Local client | [references/client-api/README.md](./references/client-api/README.md) |
+| Inject or clear environment Cookies | Local | [references/api/INDEX.md](references/api/INDEX.md) |
+| Read GPU facts or clear local environment data | Local client | [references/client-api/INDEX.md](./references/client-api/INDEX.md) |
 | Drive the launched browser | CDP | [references/workflows/cdp-automation.md](./references/workflows/cdp-automation.md) |
 | Set up or refresh a credential | Either | [references/workflows/token-lifecycle.md](./references/workflows/token-lifecycle.md) |
 
@@ -51,49 +64,28 @@ The server API has no launch route, so an environment cannot be started from the
 
 ## Token Lifecycle
 
-Two credentials exist and are not interchangeable: the **local token** grants the loopback API and is captured from the bundled browser extension, and the **server token** grants the management-center API and is supplied by the user once. Both are cached in the user profile, outside this skill. The server cache also holds the company and user, so environment variables are optional once a session is saved. It additionally records the expiry returned by `POST /v2/sso/auth/tokenRefresh`, and the helpers refresh before a call when that expiry is close, so a session stays warm without user action.
+Workbench is the authority for the management-center credential. Every authenticated management operation re-reads the page's token, current user, and selected company before sending a business request. The cache is one user-level atomic snapshot, never an independent login or refresh source. The Workbench extension is outside this flow. On missing CDP, logout, mismatch, or sync failure, stop and guide the user to Workbench.
 
 ```powershell
 node scripts/yunlogin-auth.mjs status
-node scripts/yunlogin-auth.mjs save-server-token
+node scripts/yunlogin-auth.mjs sync-workbench --dry-run
+node scripts/yunlogin-auth.mjs sync-workbench
 node scripts/yunlogin-auth.mjs ensure-server
-node scripts/yunlogin-auth.mjs refresh-server-token
-node scripts/yunlogin-auth.mjs ensure-local --confirm-create
 ```
 
-The local token is replaced only when it stops working: a rejected one is captured again. The server token is refreshed before it expires. Every server call refreshes first when the remaining lifetime is inside the refresh window, which defaults to 24 hours and can be changed with `YUNLOGIN_SERVER_REFRESH_SKEW_MS`. A rejected server token is deleted and needs a fresh value from the user. Never print, commit, or paste a token, and keep the cache files outside the repository.
+`status` compares Workbench with the snapshot without writing; `sync-workbench` validates and replaces it. The helpers do not call `tokenRefresh` separately. Browser automation can attach directly to the verified CDP URL through Playwright CLI, without credential synchronization. Never print, commit, or paste a token.
 
-Read [references/workflows/token-lifecycle.md](./references/workflows/token-lifecycle.md) for storage paths, resolution order, and the refresh rules.
+Read [references/workflows/token-lifecycle.md](./references/workflows/token-lifecycle.md) for source fields, consistency checks, failure handling, and cache rules. Ask the user to finish login or company selection in Workbench when synchronization cannot complete.
 
 ## Environment Lifecycle
 
-Read [references/workflows/environment-lifecycle.md](./references/workflows/environment-lifecycle.md) before touching environments, groups, or tags.
+Read [references/workflows/environment-lifecycle.md](./references/workflows/environment-lifecycle.md) before touching environments, groups, or tags, and [references/workflows/environment-inputs.md](./references/workflows/environment-inputs.md) for the input map and field type rules.
 
-Resolve every field of a create or modify from its documented source before writing. `putalluri` is an upsert keyed by `browser.shopid`, and a read response is not a valid write body. Read [references/workflows/environment-inputs.md](./references/workflows/environment-inputs.md) for the input map and the field type rules.
-
-- Create and delete through the server API first and the local API second.
-- Use `scripts/yunlogin-env.mjs` so every step stays on a documented route.
-- Names are normalized before sending: unsupported characters collapse to a dash, and the result is capped at 32 characters. Keep names short and put detail in the remark.
-- Tag colours come from the eight-value palette in [references/server-api/tag-colors.md](references/server-api/tag-colors.md).
-
-Creation, deletion, grouping, and tagging are mutations. Confirm the target with the user first.
-
-- Before creating, ask the user which group, remark, and tags to apply. `create` with no attribute flag stops with exit code 2 and prints `needsAttributes` together with the real group and tag names, so the question can be concrete.
-- Pass the chosen values back as `--group`, `--notes`, and `--label`, then `--confirm-attributes`. Pass `--accept-defaults` only when the user really wants the default group with no remark and no tags.
-- `create` refuses a remark, tag, or group until `--confirm-attributes` is passed.
-- Tags need the server route. The local create route has no tag field, so a local fallback reports `skippedAttributes` instead of claiming the tags were applied.
-- Every delete command refuses to run until `--confirm-delete` (or `--confirm-clean`) is passed.
-- Without the flag the helper exits with code 2 and a `needsConfirmation` payload instead of acting.
-
-```powershell
-node scripts/yunlogin-env.mjs list --name <optional filter>
-node scripts/yunlogin-env.mjs create --name <name> --dry-run
-node scripts/yunlogin-env.mjs delete --account-id <account-id> --confirm-delete
-```
+Creation, deletion, grouping, and tagging are mutations: confirm the target with the user first. Resolve every field of a write from its documented source - `putalluri` is an upsert keyed by `browser.shopid`, and a read response is not a valid write body. Use `scripts/yunlogin-env.mjs` so every step stays on a documented route: `create` refuses a remark, tag, or group until `--confirm-attributes` is passed, and every delete refuses to run until `--confirm-delete` or `--confirm-clean`. Tags need the server route; tag colours come from [references/server-api/tag-colors.md](references/server-api/tag-colors.md).
 
 ## Local Workflow
 
-1. Find the operation in [references/api/README.md](references/api/README.md) and read its document.
+1. Find the operation in [references/api/INDEX.md](references/api/INDEX.md) and read its document.
 2. Check availability with `GET /status`; local success codes are endpoint-specific.
 3. Resolve names to IDs with documented reads before mutating anything.
 
@@ -105,7 +97,7 @@ node scripts/yunlogin-api.mjs local POST /documented/path '{"documentedField":"v
 ## Server Workflow
 
 1. Start with [references/server-api/INDEX.md](references/server-api/INDEX.md) to pick the route, then read its endpoint document plus [references/server-api/ERRORS.md](references/server-api/ERRORS.md).
-2. Configure the session with `node scripts/yunlogin-auth.mjs save-server-token`. See [references/server-api/TOKEN_SETUP.md](references/server-api/TOKEN_SETUP.md).
+2. Synchronize the Workbench session with `node scripts/yunlogin-auth.mjs sync-workbench`. See [references/server-api/TOKEN_SETUP.md](references/server-api/TOKEN_SETUP.md).
 3. Call a cataloged endpoint ID with `scripts/yunlogin-server-api.mjs`. It rejects unknown IDs and supports `--dry-run`.
 4. Read the HTTP status and the business `code` separately. Most failures arrive as HTTP 200 with a non-200 code, and the message may be localised.
 
@@ -115,15 +107,16 @@ node scripts/yunlogin-server-api.mjs browser-cookie --body '{"shopid":"<shopid>"
 node scripts/yunlogin-server-api.mjs proxy-cloud-list --query page=1 --query per_page=20
 ```
 
-The helper accepts only the 53 endpoints cataloged in [references/server-api/endpoints.json](references/server-api/endpoints.json) and never sends an arbitrary URL. All 53 have been exercised; the evidence is in [references/server-api/TEST_REPORT.md](references/server-api/TEST_REPORT.md).
+The helper accepts only the 54 endpoints cataloged in [references/server-api/endpoints.json](references/server-api/endpoints.json) and never sends an arbitrary URL. All 54 have been exercised; the evidence is in [references/server-api/TEST_REPORT.md](references/server-api/TEST_REPORT.md). The live response field path/type inventory is in [references/server-api/FIELD_INVENTORY.md](references/server-api/FIELD_INVENTORY.md).
 
 ## CDP Automation
 
 Read [references/workflows/cdp-automation.md](./references/workflows/cdp-automation.md) to launch an environment and connect over CDP.
 
-- Use `scripts/yunlogin-cdp.mjs` for `start`, `check`, `targets`, `open`, `eval`, `storage-get`, and `capture-local-token`.
+- Use `scripts/yunlogin-cdp.mjs` for environment browser `start`, `check`, `targets`, `open`, `eval`, and `storage-get`; use `yunlogin-client.mjs start` for Workbench CDP and `yunlogin-auth.mjs sync-workbench` for credentials.
 - `data.ws.puppeteer` from the launch response is the CDP URL; an external CDP URL must be supplied explicitly.
-- The official Playwright CLI is optional. Offer the pairing, **ask the user before installing**, then follow [references/workflows/playwright-cli.md](./references/workflows/playwright-cli.md). Attach with `playwright-cli -s=yunlogin attach --cdp=<url>` and detach when finished.
+- The official Playwright CLI is optional. Detect it first; ask before installing the CLI or its skill, then follow [references/workflows/playwright-cli.md](./references/workflows/playwright-cli.md). Use `yunlogin-client.mjs status` for the current Workbench CDP URL, attach with `playwright-cli -s=yunlogin-workbench attach --cdp=<url>`, and detach when finished.
+- For an already-running Windows `fb.exe` with no remote-debugging transport, use `scripts/yunlogin-fb-cdp.mjs` to inspect the process, plan a relaunch, and verify CDP. The process cannot be modified in place; `--confirm-restart` is required, the port is loopback-only, and raw command lines are redacted by default.
 - `append_cmd` belongs to the local launch call only. Do not override environment-managed profile, proxy, fingerprint, or debugging-port settings.
 
 ## Authorization And Sensitive Data
@@ -136,9 +129,9 @@ Never place tokens, Cookies, proxy credentials, account passwords, 2FA secrets, 
 
 ## Maintenance
 
-- Read [scripts/README.md](scripts/README.md) when selecting or maintaining a helper.
+- Read [references/scripts.md](references/scripts.md) when selecting or maintaining a helper.
 - Keep all skill text in English.
 - Read [references/testing.md](references/testing.md) for current coverage and [references/server-api/TEST_REPORT.md](references/server-api/TEST_REPORT.md) for per-endpoint results.
-- Run `node scripts/yunlogin-doctor.mjs` after any change. It checks structure, catalog consistency, secret and encoding hygiene, and the behaviour of every helper CLI; add `--live` to probe the running desktop and the cached server session.
-- After changing either reference set or a catalog consumer, run `node scripts/dev/validate-api-docs.mjs`.
+- Run `node scripts/yunlogin-doctor.mjs` after any change. Add `--audit` to run the full research audit (documentation, drift replay, write and delete round trips, residue check). It checks structure, catalog consistency, secret and encoding hygiene, and the behaviour of every helper CLI; add `--live` to probe the running desktop and the cached server session.
+- After changing either reference set or a catalog consumer, run `node scripts/dev/validate-api-docs.mjs`. The doctor also enforces the skill-creator frontmatter contract (hyphen-case name, allowed keys, a non-empty description with no angle brackets or TODO markers), so `quick_validate.py` from the skill-creator stays satisfied; run `node scripts/dev/check-links.mjs` after moving or renaming any reference.
 - Keep the helpers separated: the local helper must not accept a server origin, and the server helper must not accept a loopback origin.

@@ -4,14 +4,16 @@ import { access, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { routeSafetyReason } from "../lib/route-safety.mjs";
+
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const scriptsDir = path.resolve(scriptDir, "..");
 const skillDir = path.resolve(scriptDir, "..", "..");
 const localDir = path.join(skillDir, "references", "api");
-const localIndexPath = path.join(localDir, "README.md");
+const localIndexPath = path.join(localDir, "INDEX.md");
 const serverDir = path.join(skillDir, "references", "server-api");
 const serverCatalogPath = path.join(serverDir, "endpoints.json");
-const serverIndexPath = path.join(serverDir, "README.md");
+const serverIndexPath = path.join(serverDir, "INDEX.md");
 const removedRemoteDir = path.join(skillDir, "references", "remote-api");
 const allowedMethods = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 const endpointIdPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -46,7 +48,7 @@ assert(!(await exists(removedRemoteDir)), "Removed remote API directory must not
 
 const localIndex = await readFile(localIndexPath, "utf8");
 const localEntries = [...localIndex.matchAll(/\[([^\]]+)\]\(\.\/([^)]+\.md)\)\s*\|\s*`([^`]+)`/g)].map((match) => ({ name: match[1], file: match[2], endpoint: match[3] }));
-const localFiles = (await readdir(localDir)).filter((name) => name.endsWith(".md") && name !== "README.md").sort();
+const localFiles = (await readdir(localDir)).filter((name) => name.endsWith(".md") && name !== "INDEX.md").sort();
 assert(localEntries.length === 23, `Expected 23 local index entries, got ${localEntries.length}`);
 assert(localFiles.length === 23, `Expected 23 local API documents, got ${localFiles.length}`);
 assert(new Set(localEntries.map((entry) => entry.file)).size === localEntries.length, "Local API document links are not unique");
@@ -69,12 +71,18 @@ assert(serverCatalog.surface === "server", "Server catalog surface must be serve
 assert(Array.isArray(serverCatalog.endpoints), "Server catalog must contain an endpoints array");
 assert(Array.isArray(serverCatalog.business_success_codes), "Server catalog must contain business_success_codes");
 assert(serverCatalog.business_success_codes.map(Number).includes(200), "Server success codes must include 200");
-assert(serverCatalog.endpoints.length === 53, `Expected 53 server endpoints, got ${serverCatalog.endpoints.length}`);
-assert(new Set(serverCatalog.endpoints.map((endpoint) => endpoint.id)).size === 53, "Server endpoint IDs are not unique");
-assert(new Set(serverCatalog.endpoints.map((endpoint) => endpoint.document)).size === 53, "Server endpoint document paths are not unique");
+assert(serverCatalog.endpoints.length === 54, `Expected 54 server endpoints, got ${serverCatalog.endpoints.length}`);
+assert(new Set(serverCatalog.endpoints.map((endpoint) => endpoint.id)).size === 54, "Server endpoint IDs are not unique");
+assert(new Set(serverCatalog.endpoints.map((endpoint) => endpoint.document)).size === 54, "Server endpoint document paths are not unique");
 const serverDocumentFiles = (await readdir(path.join(serverDir, "endpoints"))).filter((name) => name.endsWith(".md")).sort();
 assert(serverDocumentFiles.length === serverCatalog.endpoints.length, `Expected ${serverCatalog.endpoints.length} server endpoint documents, got ${serverDocumentFiles.length}`);
 
+// The index is the entry point, so every research deliverable must stay reachable from it.
+assert(serverIndex.includes("(RESEARCH_SUMMARY.md)"), "Server index must link RESEARCH_SUMMARY.md");
+assert(serverIndex.includes("(BLOCKLIST.md)"), "Server index must link BLOCKLIST.md");
+assert(serverIndex.includes("(ENUM_MEANINGS.md)"), "Server index must link ENUM_MEANINGS.md");
+assert(serverIndex.includes("(PARAM_ERRORS.md)"), "Server index must link PARAM_ERRORS.md");
+assert(serverIndex.includes("(BUNDLE_DRIFT.md)"), "Server index must link BUNDLE_DRIFT.md");
 const serverIndexRows = [...serverIndex.matchAll(/^\| `[^`]+` \| (GET|POST|PUT|PATCH|DELETE) \| `\/[^`]+` \|/gm)];
 assert(serverIndexRows.length === serverCatalog.endpoints.length, `Expected ${serverCatalog.endpoints.length} server index rows, got ${serverIndexRows.length}`);
 
@@ -118,8 +126,8 @@ assert(frontmatterMatch, "SKILL.md frontmatter is missing");
 const skillNameMatch = frontmatterMatch[1].match(/^name:\s*([a-z0-9-]+)\s*$/m);
 assert(skillNameMatch, "SKILL.md name is missing or invalid");
 const skillName = skillNameMatch[1];
-assert(skillSource.includes("## Invocation And Execution"), "SKILL.md invocation rules are missing");
-assert(skillSource.includes("## API Navigation"), "SKILL.md API navigation section is missing");
+assert(skillSource.includes("--dry-run"), "SKILL.md must require a dry run before the first live call");
+assert(skillSource.includes("references/INDEX.md"), "SKILL.md must link the full API map");
 assert(skillSource.includes("query with the server API, launch with the local API"), "SKILL.md must state the server-query and local-launch rule");
 assert(skillSource.includes("references/INDEX.md"), "SKILL.md must link the top-level API navigation");
 const playwrightGuidePath = path.join(skillDir, "references", "workflows", "playwright-cli.md");
@@ -127,35 +135,80 @@ assert(await exists(playwrightGuidePath), "Playwright CLI pairing guide is missi
 const playwrightGuide = await readFile(playwrightGuidePath, "utf8");
 assert(playwrightGuide.includes("@playwright/cli"), "Playwright guide must name the official package");
 assert(playwrightGuide.includes("playwright-cli install --skills agents"), "Playwright guide must document the skill install command");
-assert(playwrightGuide.includes("Do not install anything on your own initiative"), "Playwright guide must require asking the user before installing");
+assert(playwrightGuide.includes("ask whether to install it") && playwrightGuide.includes("ask before writing it"), "Playwright guide must require asking before installing the CLI and skill");
 assert(playwrightGuide.includes("npm prefix -g"), "Playwright guide must document the PATH troubleshooting");
-assert(skillSource.includes("ask the user before installing"), "SKILL.md must require asking before installing the Playwright CLI");
+assert(skillSource.includes("ask before installing"), "SKILL.md must require asking before installing the Playwright CLI");
 assert(skillSource.includes("references/workflows/playwright-cli.md"), "SKILL.md must link the Playwright CLI guide");
 const environmentInputsPath = path.join(skillDir, "references", "workflows", "environment-inputs.md");
 assert(await exists(environmentInputsPath), "Environment input source guide is missing");
 const environmentInputs = await readFile(environmentInputsPath, "utf8");
-assert(environmentInputs.includes("## Input Sources"), "Environment input guide must list the write-field sources");
-assert(environmentInputs.includes("## Field Type Rules"), "Environment input guide must state the read-to-write type rules");
+assert(environmentInputs.includes("getfingerprinturi") && environmentInputs.includes("putalluri"), "Environment input guide must tie reads to the putalluri write");
+assert(environmentInputs.includes("array") && environmentInputs.includes("string"), "Environment input guide must state the field type rules");
 assert(environmentInputs.includes("browser.shopid"), "Environment input guide must describe the putalluri upsert key");
 assert(skillSource.includes("references/workflows/environment-inputs.md"), "SKILL.md must link the environment input guide");
 const doctorPath = path.join(scriptsDir, "yunlogin-doctor.mjs");
 assert(await exists(doctorPath), "Skill self-test script is missing");
+assert(await exists(path.join(scriptsDir, "yunlogin-fb-cdp.mjs")), "fb.exe CDP helper is missing");
+assert(await exists(path.join(scriptsDir, "dev", "probe-server-api.mjs")), "Server field probe is missing");
+assert(await exists(path.join(scriptsDir, "dev", "render-field-inventory.mjs")), "Server field inventory renderer is missing");
+assert(await exists(path.join(scriptsDir, "dev", "render-field-values.mjs")), "Server field value renderer is missing");
+assert(await exists(path.join(scriptsDir, "dev", "probe-code-legends.mjs")), "Server code legend probe is missing");
+assert(await exists(path.join(scriptsDir, "dev", "render-code-legends.mjs")), "Server code legend renderer is missing");
+assert(await exists(path.join(scriptsDir, "dev", "render-domain-index.mjs")), "Server domain index renderer is missing");
+assert(await exists(path.join(scriptsDir, "dev", "render-coverage.mjs")), "Coverage renderer is missing");
+assert(await exists(path.join(scriptsDir, "dev", "verify-audit-gates.mjs")), "Audit gate verifier is missing");
+assert(await exists(path.join(scriptsDir, "dev", "check-links.mjs")), "Link checker is missing");
+assert(await exists(path.join(scriptsDir, "dev", "start-forward-test.mjs")), "Forward-test scaffolder is missing");
+assert(await exists(path.join(scriptsDir, "dev", "probe-request-params.mjs")), "Request parameter probe is missing");
+assert(await exists(path.join(scriptsDir, "dev", "render-request-params.mjs")), "Request parameter renderer is missing");
+assert(await exists(path.join(scriptsDir, "dev", "detect-route-drift.mjs")), "Route drift detector is missing");
+assert(await exists(path.join(scriptsDir, "lib", "resolved-calls.mjs")), "Resolved route call list is missing");
+assert(await exists(path.join(scriptsDir, "dev", "probe-write-effectiveness.mjs")), "Write effectiveness probe is missing");
+assert(await exists(path.join(scriptsDir, "dev", "render-write-effectiveness.mjs")), "Write effectiveness renderer is missing");
+assert(await exists(path.join(scriptsDir, "dev", "probe-delete-semantics.mjs")), "Delete semantics probe is missing");
+assert(await exists(path.join(scriptsDir, "dev", "render-delete-semantics.mjs")), "Delete semantics renderer is missing");
+assert(await exists(path.join(scriptsDir, "dev", "run-api-audit.mjs")), "End-to-end audit runner is missing");
+assert(await exists(path.join(scriptsDir, "dev", "mine-bundle-enums.mjs")), "Bundle enum miner is missing");
+assert(await exists(path.join(scriptsDir, "dev", "mine-i18n-labels.mjs")), "i18n label miner is missing");
+assert(await exists(path.join(scriptsDir, "lib", "route-safety.mjs")), "Shared route safety classifier is missing");
+assert(await exists(path.join(scriptsDir, "dev", "fixtures", "route-safety-cases.json")), "Route safety regression fixtures are missing");
+
+// Regression cases for the classifier. A change that makes a blocked route look readable would
+// re-open the junk-creating and money-spending paths the probes must never touch.
+const safetyFixtures = JSON.parse(await readFile(path.join(scriptsDir, "dev", "fixtures", "route-safety-cases.json"), "utf8"));
+const safetyMisses = [];
+for (const item of safetyFixtures.cases) {
+  const reason = routeSafetyReason({ method: item.method, path: item.path, name: item.name });
+  const blocked = reason !== "read";
+  const expectedBlocked = item.expect === "blocked";
+  if (blocked !== expectedBlocked) safetyMisses.push(`${item.method} ${item.path} expected ${item.expect} but got ${reason} (${item.why})`);
+}
+assert(safetyMisses.length === 0, `route-safety regression cases failed:\n  ${safetyMisses.join("\n  ")}`);
+assert(await exists(path.join(serverDir, "FIELD_INVENTORY.md")), "Server field inventory is missing");
+assert(await exists(path.join(serverDir, "FIELD_VALUES.md")), "Server field value domains are missing");
+assert(await exists(path.join(serverDir, "CODE_LEGENDS.md")), "Server code legends are missing");
+assert(await exists(path.join(serverDir, "DOMAIN_INDEX.md")), "Server domain index is missing");
+assert(await exists(path.join(serverDir, "REQUEST_PARAMS.md")), "Request parameter contract is missing");
+assert(await exists(path.join(serverDir, "DRIFT.md")), "Route drift report is missing");
+assert(await exists(path.join(serverDir, "COVERAGE.md")), "Research coverage summary is missing");
+assert(await exists(path.join(serverDir, "WRITE_EFFECTIVENESS.md")), "Write effectiveness evidence is missing");
+assert(await exists(path.join(serverDir, "DELETE_SEMANTICS.md")), "Delete semantics evidence is missing");
+assert(await exists(path.join(serverDir, "route-baseline.json")), "Route drift baseline is missing");
 assert(skillSource.includes("yunlogin-doctor.mjs"), "SKILL.md must document the skill self-test");
 const navigationPath = path.join(skillDir, "references", "INDEX.md");
 assert(await exists(navigationPath), "Top-level API navigation is missing");
 const navigation = await readFile(navigationPath, "utf8");
-assert(navigation.includes("## Rule Of Thumb"), "Navigation must explain the surface rule");
+assert(navigation.includes("Local API") && navigation.includes("Server API"), "Navigation must name both the local and the server surface");
 assert(navigation.includes("environment-inputs.md"), "Top-level API navigation must link the environment input guide");
-assert(navigation.includes("Launch, stop, or inspect"), "Navigation must route launching to the local API");
-assert(navigation.includes("server API has no launch route") || navigation.includes("no launch route"), "Navigation must state that the server API cannot launch");
-assert(navigation.includes("api/README.md"), "Navigation must link the local API index");
-assert(navigation.includes("client-api/README.md"), "Navigation must link the local client API guide");
+assert(navigation.includes("/api/v2/browser/start"), "Navigation must route launching to the local launch route");
+assert(!/\| \*\*Start an environment\*\* \| Server/.test(navigation), "Navigation must not route launching to the server API");
+assert(navigation.includes("api/INDEX.md"), "Navigation must link the local API index");
+assert(navigation.includes("client-api/INDEX.md"), "Navigation must link the local client API guide");
 assert(navigation.includes("server-api/INDEX.md"), "Navigation must link the server API index");
 for (const endpoint of serverCatalog.endpoints) {
   assert(navigation.includes(`\`${endpoint.id}\``), `Top-level navigation is missing ${endpoint.id}`);
   assert(navigation.includes(`(server-api/${endpoint.document})`), `Top-level navigation is missing the doc link for ${endpoint.id}`);
 }
-assert(navigation.includes("## Server API"), "Navigation must contain a server API section");
 assert(skillSource.includes("author:"), "SKILL.md metadata must carry an author");
 assert(skillSource.includes("version:"), "SKILL.md metadata must carry a version");
 // Contact is optional. When it is present it must be a usable address.
@@ -191,10 +244,10 @@ assert(metadataShort.length >= 25 && metadataShort.length <= 64, `metadata.short
 for (const entry of localEntries) {
   assert(navigation.includes(`(api/${entry.file})`), `Navigation is missing the local route ${entry.file}`);
 }
-assert(await exists(path.join(localDir, "README.md")), "Local API index is missing");
+assert(await exists(path.join(localDir, "INDEX.md")), "Local API index is missing");
 assert(skillSource.length < 12000, "SKILL.md must stay lean and route detail into references");
 assert(skillSource.includes("references/server-api/TEST_REPORT.md"), "SKILL.md must link the server test report");
-assert(skillSource.includes("## CDP Automation"), "SKILL.md CDP automation section is missing");
+assert(skillSource.includes("/api/v2/browser/start"), "SKILL.md must name the local launch route");
 const agentConfigPath = path.join(skillDir, "agents", "openai.yaml");
 const agentConfig = await readFile(agentConfigPath, "utf8");
 assert(agentConfig.startsWith("interface:\n"), "agents/openai.yaml must start with interface");
@@ -234,8 +287,8 @@ const cdpGuide = await readFile(cdpGuidePath, "utf8");
 assert(cdpGuide.includes("append_cmd"), "CDP guide must document append_cmd");
 assert(cdpGuide.includes("--cdp-url"), "CDP guide must document external CDP URL input");
 assert(cdpGuide.includes("data.ws.puppeteer"), "CDP guide must document the launch response CDP URL");
-assert(cdpGuide.includes("YUNLOGIN_LOCAL_TOKEN"), "CDP guide must document local API token authentication");
-assert(cdpGuide.includes("YUNLOGIN_LOCAL_COOKIE"), "CDP guide must document optional local API Cookie authentication");
+assert(cdpGuide.includes("sync-workbench"), "CDP guide must distinguish management session synchronization");
+assert(cdpGuide.includes("Legacy token") || cdpGuide.includes("legacy token"), "CDP guide must distinguish legacy token sources from the active Workbench session");
 assert(cdpGuide.includes("playwright-cli.md"), "CDP guide must link the Playwright CLI pairing guide");
 assert(cdpGuide.includes("Ask the user before installing"), "CDP guide must require asking before installing the Playwright CLI");
 assert(cdpGuide.includes("playwright-cli -s=yunlogin attach --cdp="), "CDP guide must document Playwright CLI attach");
@@ -250,10 +303,10 @@ assert(lifecycleGuide.includes("putalluri"), "Environment lifecycle guide must d
 assert(lifecycleGuide.includes("user/delete"), "Environment lifecycle guide must document the local delete route");
 assert(lifecycleGuide.includes("bootstrap-token"), "Environment lifecycle guide must document token bootstrap");
 assert(skillSource.includes("environment-lifecycle.md"), "SKILL.md must link the environment lifecycle guide");
-const localClientGuidePath = path.join(skillDir, "references", "client-api", "README.md");
+const localClientGuidePath = path.join(skillDir, "references", "client-api", "INDEX.md");
 assert(await exists(localClientGuidePath), "Local client API guide is missing");
 const localClientGuide = await readFile(localClientGuidePath, "utf8");
-assert(localClientGuide.includes("52446"), "Local client API guide must document the second loopback port");
+assert(localClientGuide.includes("Port Discovery"), "Local client API guide must document client port discovery");
 assert(localClientGuide.includes("gpu_info"), "Local client API guide must document gpu_info");
 assert(localClientGuide.includes("get_config"), "Local client API guide must document get_config");
 assert(localClientGuide.includes("ossToken"), "Local client API guide must flag the get_config credential");
@@ -268,7 +321,7 @@ assert(skillSource.includes("ERRORS.md"), "SKILL.md must link the error contract
 const tagColorGuidePath = path.join(serverDir, "tag-colors.md");
 assert(await exists(tagColorGuidePath), "Tag colour guide is missing");
 const tagColorGuide = await readFile(tagColorGuidePath, "utf8");
-assert(tagColorGuide.includes("#B84DFF"), "Tag colour guide must list all eight colours");
+assert((tagColorGuide.match(/#[0-9A-Fa-f]{6}\b/g) ?? []).length >= 8, "Tag colour guide must list all eight colours");
 assert(tagColorGuide.includes("do not validate"), "Tag colour guide must record the server validation gap");
 assert(await exists(path.join(scriptsDir, "lib", "tag-colors.mjs")), "tag-colors.mjs is missing");
 const testReportPath = path.join(serverDir, "TEST_REPORT.md");
@@ -279,7 +332,13 @@ assert(reportRows.length === serverCatalog.endpoints.length, `Test report must c
 for (const endpoint of serverCatalog.endpoints) {
   assert(reportRows.includes(endpoint.id), `Test report is missing ${endpoint.id}`);
 }
-assert(testReport.includes("HTTP 404, route not served"), "Test report must list the unavailable routes");
+// The summary must agree with the catalog it summarises, and the three routes that used to look
+// unavailable must stay documented by their real method. A wrong HTTP method answers 404 here, so a
+// bare wording check on "route not served" would freeze the stale pre-correction conclusion.
+assert(testReport.includes(`| Total cataloged routes | ${serverCatalog.endpoints.length} |`), "Test report summary must state the catalog total");
+for (const id of ["current-company-info", "team-authentication-get", "company-user-devices"]) {
+  assert(testReport.includes(`\`${id}\``), `Test report must record the method-corrected route ${id}`);
+}
 const indexGuidePath = path.join(serverDir, "INDEX.md");
 assert(await exists(indexGuidePath), "Server API index is missing");
 const indexGuide = await readFile(indexGuidePath, "utf8");
@@ -287,7 +346,7 @@ for (const endpoint of serverCatalog.endpoints) {
   assert(indexGuide.includes(`\`${endpoint.id}\``), `Server index is missing ${endpoint.id}`);
   assert(indexGuide.includes(`(${endpoint.document})`), `Server index is missing the doc link for ${endpoint.id}`);
 }
-assert(indexGuide.includes("## Find By Task"), "Server index must offer task-based navigation");
+assert(indexGuide.includes("| I want to |"), "Server index must keep a task-based lookup table");
 const writeIds = serverCatalog.endpoints.filter((endpoint) => endpoint.mutation === true).map((endpoint) => endpoint.id);
 assert(writeIds.length === 7, `Expected 7 mutation endpoints, got ${writeIds.length}`);
 for (const id of writeIds) {
@@ -333,53 +392,122 @@ assert(envHelper.includes("confirmAttributes"), "yunlogin-env.mjs must gate attr
 assert(envHelper.includes("/api/v1/client/clean_env"), "yunlogin-env.mjs must expose the local clean route");
 assert(await exists(path.join(scriptsDir, "yunlogin-auth.mjs")), "yunlogin-auth.mjs is missing");
 const authHelper = await readFile(path.join(scriptsDir, "yunlogin-auth.mjs"), "utf8");
-assert(authHelper.includes("save-server-token"), "yunlogin-auth.mjs must expose save-server-token");
+assert(authHelper.includes("sync-workbench"), "yunlogin-auth.mjs must expose sync-workbench");
 assert(authHelper.includes("ensure-server"), "yunlogin-auth.mjs must expose ensure-server");
-assert(authHelper.includes("ensure-local"), "yunlogin-auth.mjs must expose ensure-local");
+assert(authHelper.includes("ensure-local"), "yunlogin-auth.mjs must reject legacy ensure-local");
+assert(authHelper.includes("workbenchStatus"), "yunlogin-auth.mjs must compare the live Workbench session");
+const serverHelper = await readFile(path.join(scriptsDir, "yunlogin-server-api.mjs"), "utf8");
+assert(serverHelper.includes("requires_auth"), "yunlogin-server-api.mjs must honor public endpoints");
+assert(serverHelper.includes("header_defaults"), "yunlogin-server-api.mjs must apply catalog header defaults");
+const loginEndpoint = serverCatalog.endpoints.find((endpoint) => endpoint.id === "sso-login");
+assert(loginEndpoint?.path === "/v2/sso/login", "sso-login catalog entry is missing the login route");
+assert(loginEndpoint?.requires_auth === false, "sso-login must be marked as a public endpoint");
 const tokenStore = await readFile(path.join(scriptsDir, "lib", "local-token-store.mjs"), "utf8");
-assert(tokenStore.includes("server-token.json"), "local-token-store.mjs must define the server session cache");
+assert(tokenStore.includes("readWorkbenchSession"), "local-token-store.mjs must read the Workbench session cache");
 assert(tokenStore.includes("readServerIdentity"), "local-token-store.mjs must expose the cached identity");
 const tokenGuidePath = path.join(skillDir, "references", "workflows", "token-lifecycle.md");
 assert(await exists(tokenGuidePath), "Token lifecycle guide is missing");
 const tokenGuide = await readFile(tokenGuidePath, "utf8");
-assert(tokenGuide.includes("local-token.json") && tokenGuide.includes("server-token.json"), "Token lifecycle guide must document both cache files");
-assert(tokenGuide.includes("save-server-token"), "Token lifecycle guide must document saving the server token");
-assert(tokenGuide.includes("needsNewToken"), "Token lifecycle guide must document stale-token handling");
+assert(tokenGuide.includes("workbench-session.json"), "Token lifecycle guide must document the active Workbench cache");
+assert(tokenGuide.includes("sync-workbench"), "Token lifecycle guide must document synchronization");
+assert(tokenGuide.includes("synchronization invalidates"), "Token lifecycle guide must document failed synchronization");
 assert(skillSource.includes("token-lifecycle.md"), "SKILL.md must link the token lifecycle guide");
 assert(!tokenStore.includes("console.log"), "The token store must not log token material");
-assert(cdpGuide.includes("capture-local-token"), "CDP guide must document capture-local-token");
-assert(cdpGuide.includes("DOMStorage"), "CDP guide must document the DOMStorage read path");
-assert(cdpGuide.includes("YUNLOGIN_LOCAL_TOKEN_FILE"), "CDP guide must document the token cache override");
-assert(cdpGuide.includes("yunlogin-browser") && cdpGuide.includes("local-token.json"), "CDP guide must document the user-level token cache path");
-assert(cdpGuide.includes("YUNLOGIN_SERVER_TOKEN"), "CDP guide must separate the local token from the server token");
+assert(cdpGuide.includes("sync-workbench"), "CDP guide must document Workbench credential synchronization");
+assert(cdpGuide.includes("management-center page"), "CDP guide must separate management credentials from browser CDP attachment");
+assert(/legacy token/i.test(cdpGuide), "CDP guide must reject legacy token fallback");
+assert(cdpGuide.includes("yunlogin-fb-cdp.mjs"), "CDP guide must document the fb.exe relaunch helper");
+assert(cdpGuide.includes("--confirm-restart"), "CDP guide must require confirmation before restarting fb.exe");
 
 const testingPath = path.join(skillDir, "references", "testing.md");
 assert(await exists(testingPath), "Test coverage document is missing");
 const testingGuide = await readFile(testingPath, "utf8");
 assert(testingGuide.includes("All 23 documented local API routes were exercised"), "Local API test coverage summary is missing");
-assert(testingGuide.includes("All 53 cataloged server routes were tested"), "Server API test coverage summary is missing");
+assert(testingGuide.includes("All 54 cataloged server routes were tested"), "Server API test coverage summary is missing");
 assert(testingGuide.includes("Environment Lifecycle"), "Environment lifecycle coverage is missing");
 assert(testingGuide.includes("putalluri"), "Environment create evidence is missing");
 assert(testingGuide.includes("Playwright CLI"), "Playwright CLI test coverage is missing");
-assert(testingGuide.includes("107 Kernel CDP Verification"), "107 kernel CDP verification is missing");
-assert(testingGuide.includes("Workbench CDP Investigation"), "Workbench CDP investigation is missing");
+// Discoverability and the required skill-creator testing procedure, not a heading check.
+assert(testingGuide.includes("(server-api/TEST_REPORT.md)"), "testing.md must link the server test report");
+assert(/isolat/i.test(testingGuide) && /forward test/i.test(testingGuide), "testing.md must document the isolated forward-test procedure");
 assert(testingGuide.includes("does not expose an attachable CDP endpoint"), "Workbench CDP conclusion is missing");
 assert(testingGuide.includes("HeadlessChrome/107.0.5304.114"), "107 kernel headless version evidence is missing");
-assert(testingGuide.includes("Extension Token Bootstrap"), "Extension token bootstrap coverage is missing");
+assert(testingGuide.includes("token-lifecycle.md"), "Testing notes must link the token lifecycle workflow");
 assert(testingGuide.includes("capture-local-token"), "Extension token capture evidence is missing");
+assert(testingGuide.includes("fb.exe CDP Relaunch"), "fb.exe CDP relaunch test coverage is missing");
+assert(testingGuide.includes("FIELD_INVENTORY.md"), "Testing notes must link the field inventory");
 
-const scriptsReadme = await readFile(path.join(scriptsDir, "README.md"), "utf8");
-assert(scriptsReadme.includes("capture-local-token"), "scripts/README.md must document capture-local-token");
-assert(scriptsReadme.includes("local-token-store.mjs"), "scripts/README.md must document local-token-store.mjs");
+const scriptsReadme = await readFile(path.join(skillDir, "references", "scripts.md"), "utf8");
+assert(scriptsReadme.includes("sync-workbench"), "references/scripts.md must document sync-workbench");
+assert(scriptsReadme.includes("local-token-store.mjs"), "references/scripts.md must document local-token-store.mjs");
+assert(scriptsReadme.includes("yunlogin-fb-cdp.mjs"), "references/scripts.md must document yunlogin-fb-cdp.mjs");
+assert(scriptsReadme.includes("FIELD_INVENTORY.md"), "references/scripts.md must document the field inventory renderer");
+assert(scriptsReadme.includes("FIELD_VALUES.md"), "references/scripts.md must document the field value renderer");
+assert(scriptsReadme.includes("probe-code-legends.mjs"), "references/scripts.md must document the code legend probe");
+assert(scriptsReadme.includes("DOMAIN_INDEX.md"), "references/scripts.md must document the domain index renderer");
+assert(scriptsReadme.includes("REQUEST_PARAMS.md"), "references/scripts.md must document the request parameter renderer");
+assert(scriptsReadme.includes("detect-route-drift.mjs"), "references/scripts.md must document the route drift detector");
+assert(scriptsReadme.includes("WRITE_EFFECTIVENESS.md"), "references/scripts.md must document the write effectiveness renderer");
+assert(scriptsReadme.includes("DELETE_SEMANTICS.md"), "references/scripts.md must document the delete semantics renderer");
+assert(scriptsReadme.includes("run-api-audit.mjs"), "references/scripts.md must document the end-to-end audit runner");
+assert(scriptsReadme.includes("mine-i18n-labels.mjs"), "references/scripts.md must document the i18n label miner");
+assert(scriptsReadme.includes("check-bundle-drift.mjs"), "references/scripts.md must document the bundle drift checker");
+assert(scriptsReadme.includes("render-blocklist.mjs"), "references/scripts.md must document the withheld-route renderer");
+assert(scriptsReadme.includes("render-param-errors.mjs"), "references/scripts.md must document the parameter-error renderer");
+assert(scriptsReadme.includes("sweep-all-routes.mjs"), "references/scripts.md must document the full-surface sweep");
+assert(scriptsReadme.includes("reprobe-resolved-routes.mjs"), "references/scripts.md must document the resolved-route re-probe");
+assert(scriptsReadme.includes("probe-field-types.mjs"), "references/scripts.md must document the request-field type probe");
+assert(scriptsReadme.includes("client-bundle.mjs"), "references/scripts.md must document the bundle discovery helper");
+assert(scriptsReadme.includes("route-safety.mjs"), "references/scripts.md must document the shared route safety classifier");
+assert(scriptsReadme.includes("COVERAGE.md"), "references/scripts.md must document the coverage renderer");
+assert(scriptsReadme.includes("verify-audit-gates.mjs"), "references/scripts.md must document the audit gate verifier");
+assert(scriptsReadme.includes("check-links.mjs"), "references/scripts.md must document the link checker");
+assert(scriptsReadme.includes("start-forward-test.mjs"), "references/scripts.md must document the forward-test scaffolder");
+assert(scriptsReadme.includes("--audit"), "references/scripts.md must document the doctor audit mode");
 
+// Files that intentionally preserve raw API evidence may contain UTF-8 (for example
+// a Chinese `msg` value captured from a live response). Prose documents and code
+// stay ASCII-only; the token-leak guard still runs against every file.
+// Self-test hook for the gate verifier: a deliberate failure proves the validator exits non-zero.
+if (process.argv.includes("--fault")) assert(false, "injected validator fault");
+
+const utf8EvidencePatterns = [
+  /^references[\\/]server-api[\\/]ROUTE_FIELDS\.md$/,
+  /^references[\\/]server-api[\\/]ROUTE_CATALOG\.md$/,
+  /^references[\\/]server-api[\\/]CLIENT_CALLSITES\.md$/,
+  /^references[\\/]server-api[\\/]WRITE_ROUTE_PARAMS\.md$/,
+  /^references[\\/]server-api[\\/]WRITE_ROUNDTRIPS\.md$/,
+  /^references[\\/]server-api[\\/]RESPONSE_SHAPES\.md$/,
+  /^references[\\/]server-api[\\/]ERRORS\.md$/,
+  /^references[\\/]server-api[\\/]TEST_REPORT\.md$/,
+  /^references[\\/]server-api[\\/]client-callsites\.json$/,
+  /^references[\\/]server-api[\\/]client-params\.json$/,
+  /^references[\\/]server-api[\\/]route-sweep\.json$/,
+  /^references[\\/]server-api[\\/]PARAMETER_MATRIX\.md$/,
+  /^references[\\/]server-api[\\/]PARAM_ERRORS\.md$/,
+  /^references[\\/]server-api[\\/]ENUM_MEANINGS\.md$/,
+  /^references[\\/]server-api[\\/]FIELD_VALUES\.md$/,
+  /^references[\\/]server-api[\\/]FIELD_INVENTORY\.md$/, // field meanings quote the client i18n label
+  /^references[\\/]server-api[\\/]CODE_LEGENDS\.md$/,
+  /^references[\\/]server-api[\\/]DOMAIN_INDEX\.md$/,
+  /^references[\\/]server-api[\\/]COVERAGE\.md$/,
+  /^references[\\/]server-api[\\/]endpoints[\\/][a-z0-9-]+\.md$/,
+  /^scripts[\\/]dev[\\/]render-route-catalog\.mjs$/,
+  /^scripts[\\/]dev[\\/]render-write-params\.mjs$/,
+];
+function allowsUtf8Evidence(relative) {
+  return utf8EvidencePatterns.some((pattern) => pattern.test(relative));
+}
 for (const file of await listFiles(skillDir)) {
   assert(path.basename(file) !== "local-token.json", `Token cache must not live inside the skill: ${path.relative(skillDir, file)}`);
   assert(path.basename(file) !== "server-token.json", `Server session cache must not live inside the skill: ${path.relative(skillDir, file)}`);
   if (![".md", ".json", ".mjs", ".yaml"].includes(path.extname(file))) continue;
   const source = await readFile(file, "utf8");
   const relative = path.relative(skillDir, file);
-  assert(!/[\u4e00-\u9fff]/.test(source), `Chinese text found in ${relative}`);
-  assert(!/[^\x00-\x7F]/.test(source), `Non-ASCII text found in ${relative}`);
+  if (!allowsUtf8Evidence(relative)) {
+    assert(!/[\u4e00-\u9fff]/.test(source), `Chinese text found in ${relative}`);
+    assert(!/[^\x00-\x7F]/.test(source), `Non-ASCII text found in ${relative}`);
+  }
   assert(!tokenLikePattern.test(source), `Token-like value found in ${relative}`);
 }
 

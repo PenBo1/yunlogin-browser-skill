@@ -1,13 +1,27 @@
 # Local Client API (api/v1)
 
-The YunLogin desktop application listens on two loopback ports. Keep them separate:
+For startup, installation discovery, user prompts, and the evidence-backed port map, read [STARTUP.md](./STARTUP.md) first.
+
+The desktop exposes separate services, including dynamically assigned ports. The table lists API surfaces, not the total listener count:
 
 | Port | Prefix | Documented in |
 | --- | --- | --- |
-| 50213 | `/api/v2/...` | [api/README.md](../api/README.md) |
-| 52446 | `/api/v1/client/...` | This document |
+| 50213 | `/api/v2/...` | [api/INDEX.md](../api/INDEX.md) |
+| discovered | `/api/v1/client/...` | This document |
 
-The `52446` service is the client-side helper surface. It serves machine facts that the fingerprint engine needs, so it answers without a bearer token on a local desktop. The origin is loopback-only; never expose it beyond the machine.
+The client helper is the client-side surface. It serves machine facts that the fingerprint engine needs, so it answers without a bearer token on a local desktop. The origin is loopback-only; never expose it beyond the machine.
+
+## Port Discovery
+
+The helper port is chosen by the desktop process and is not fixed. Historical observations include `64992` and `52446`; the 2026-10-19 observation answered on `54823`. None is a default to probe blindly.
+
+`scripts/lib/client-origin.mjs` resolves the origin in this order:
+
+1. An explicit `YUNLOGIN_CLIENT_BASE_URL` (or `YUNLOGIN_CLIENT_ORIGIN`), validated as loopback and checked with the GPU route.
+2. Fresh `YunLogin.exe` PID/listener inventory. The cached origin is only preferred when it still belongs to that inventory.
+3. Probe current process-owned candidates. If none verifies, report unavailable instead of returning an invented fallback address.
+
+Each candidate must answer `POST /api/v1/client/gpu_info` with HTTP 200, `code: 0`, and `data.adapters` as an array. Run `node scripts/yunlogin-ports.mjs` for the full fresh port inventory and verified `clientApiOrigins`/`localApiOrigins`. Explicit overrides are intentional caller choices; automatic discovery never probes unrelated local services.
 
 ## Endpoints
 
@@ -34,7 +48,7 @@ node scripts/yunlogin-env.mjs list --transport local
 The environment helper reads this route internally when it builds a creation template. To call it directly:
 
 ```powershell
-curl.exe -s -X POST "http://127.0.0.1:52446/api/v1/client/gpu_info" -H "Content-Type: text/plain;charset=UTF-8" --data-raw "{}"
+curl.exe -s -X POST "http://127.0.0.1:<port>/api/v1/client/gpu_info" -H "Content-Type: text/plain;charset=UTF-8" --data-raw "{}"
 ```
 
 ### Response
@@ -125,6 +139,13 @@ Returns the desktop client configuration. The payload mixes harmless settings wi
 
 No parameters and no bearer token on the tested build.
 
+```powershell
+node scripts/yunlogin-client.mjs config --dry-run
+node scripts/yunlogin-client.mjs config
+```
+
+The helper discovers the current client port first, sends GET without a body, and prints only an allowlisted summary. Browser-specific `Origin`, `Sec-Fetch-*`, `sec-ch-ua*`, and copied User-Agent headers from a captured curl command are unnecessary on the tested build. A new build rejecting this minimal request must be investigated; do not copy a stale browser origin or invent authentication.
+
 ### Response
 
 | Field | Type | Sensitivity |
@@ -140,12 +161,12 @@ No parameters and no bearer token on the tested build.
 
 ### Handling Rules
 
-- Never print, log, cache, or copy this response. The STS credential can write to the account object storage, and the cookie digest table maps every environment on the machine.
+- Never print, log, cache, or copy the raw response. Credentials and cookie digests may be present; report only the helper's allowlisted summary.
 - Do not call this route for routine work. `gpu_info` and `clean_env` cover the normal creation and cleanup flows.
 - If the value is genuinely required, read it in memory, use it immediately, and let it go out of scope. Do not write it to disk.
-- Redact `ossToken` and `cookieMd5` in any transcript that leaves the machine.
+- Withhold unknown fields, nested values, network configuration, `ossToken`, and `cookieMd5`. The helper also withholds raw server error messages. A blacklist alone cannot cover future secret fields.
 
 ## Notes
 
 - The response describes the machine that runs the desktop client. Do not copy adapter values into the skill; read them at runtime.
-- A missing `52446` listener means the desktop helper service is unavailable. Creation still works without GPU data because the helper falls back to generic WebGL values.
+- A missing listener on every candidate port means the desktop helper service is unavailable. Creation still works without GPU data because the helper falls back to generic WebGL values.

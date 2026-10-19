@@ -116,3 +116,9 @@ Failures arrive as HTTP 200 with a non-200 business code. Read [ERRORS.md](../ER
 - Each row carries its own `token`. The helper redacts `token` and `ip` by default; never print the raw values.
 - The `avatar` URL points at the account object storage. Treat it as account metadata rather than a public asset.
 - Use this route to discover the `companyid` before calling `browser-list`, `team-members`, or the proxy routes.
+
+## See Also
+
+- [RESPONSE_SHAPES.md](../RESPONSE_SHAPES.md) - envelope, key-name, and type traps across the surface.
+- [WRITE_ROUNDTRIPS.md](../WRITE_ROUNDTRIPS.md) - verified write round trips and silent-failure notes.
+- [ERRORS.md](../ERRORS.md) - HTTP vs business code contract.
