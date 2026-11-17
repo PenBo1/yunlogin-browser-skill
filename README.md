@@ -12,7 +12,7 @@
   <strong>English</strong> | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-<p align="center">Version 1.1.7 · MIT</p>
+<p align="center">Version 1.1.1 · MIT</p>
 
 ## Overview
 

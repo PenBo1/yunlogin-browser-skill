@@ -5,7 +5,7 @@ license: MIT
 metadata:
   short-description: Manage YunLogin environments, accounts, and proxies by API
   author: PenBo
-  version: 1.1.7
+  version: 1.1.1
   updated: 2026-11-17
   repository: https://github.com/PenBo1/yunlogin-browser-skill
 ---

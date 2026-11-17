@@ -12,7 +12,7 @@
   <a href="README.md">English</a> | <strong>简体中文</strong>
 </p>
 
-<p align="center">版本 1.1.7 · MIT</p>
+<p align="center">版本 1.1.1 · MIT</p>
 
 ## 项目简介
 
