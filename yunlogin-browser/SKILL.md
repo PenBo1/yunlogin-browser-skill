@@ -5,8 +5,8 @@ license: MIT
 metadata:
   short-description: Manage YunLogin environments, accounts, and proxies by API
   author: PenBo
-  version: 1.1.0
-  updated: 2026-10-19
+  version: 1.1.7
+  updated: 2026-11-17
   repository: https://github.com/PenBo1/yunlogin-browser-skill
 ---
 
@@ -24,13 +24,17 @@ Never silently switch surfaces. A path or parameter that works on one surface do
 
 ## Client Availability And Startup
 
+Read [references/client-api/STARTUP.md](./references/client-api/STARTUP.md) for runtime, startup and macOS Workbench failure reminders. Report the observed state, blocked operation and recovery step before proceeding.
+
+Use [references/interaction.md](./references/interaction.md) for user-facing Workbench wording, stage reporting and recovery choices.
+
 Before a local call, check client availability:
 
 ```powershell
 node scripts/yunlogin-client.mjs status
 ```
 
-Follow [references/client-api/STARTUP.md](./references/client-api/STARTUP.md) for startup consent and installation. Run `node scripts/yunlogin-ports.mjs` for fresh ports; never reuse observed numbers.
+Client discovery, startup and TCP listener discovery support Windows and macOS. Run `node scripts/yunlogin-ports.mjs` for fresh ports. Windows uses native Workbench CDP when verified; macOS uses the explicit [web Workbench fallback](references/workflows/web-workbench.md) when native Workbench CDP is unavailable: Playwright CLI browser, loopback CDP, verified bridge ports and environment-sourced Authorization.
 
 The client bundle mixes all three, so a path alone does not prove its target: `/api/v1/client/`, `/api/v1/settings/`, `/api/v1/cores/`, and `/api/v1/ipify/` are **local client-API** paths, and sending one to the server origin answers HTTP 405 or a plain 404. Read [references/server-api/WORKFLOW.md](references/server-api/WORKFLOW.md) for the rest of the routing rule.
 
@@ -64,7 +68,7 @@ The server API has no launch route, so an environment cannot be started from the
 
 ## Token Lifecycle
 
-Workbench is the authority for the management-center credential. Every authenticated management operation re-reads the page's token, current user, and selected company before sending a business request. The cache is one user-level atomic snapshot, never an independent login or refresh source. The Workbench extension is outside this flow. On missing CDP, logout, mismatch, or sync failure, stop and guide the user to Workbench.
+The API helpers use the verified native Workbench session. Every authenticated management operation re-reads the token, user and selected company before sending a business request. The web Workbench fallback has its own validated page session; it does not silently replace the API helper session. Use [references/interaction.md](./references/interaction.md) when explaining this to the user.
 
 ```powershell
 node scripts/yunlogin-auth.mjs status
@@ -115,8 +119,8 @@ Read [references/workflows/cdp-automation.md](./references/workflows/cdp-automat
 
 - Use `scripts/yunlogin-cdp.mjs` for environment browser `start`, `check`, `targets`, `open`, `eval`, and `storage-get`; use `yunlogin-client.mjs start` for Workbench CDP and `yunlogin-auth.mjs sync-workbench` for credentials.
 - `data.ws.puppeteer` from the launch response is the CDP URL; an external CDP URL must be supplied explicitly.
-- The official Playwright CLI is optional. Detect it first; ask before installing the CLI or its skill, then follow [references/workflows/playwright-cli.md](./references/workflows/playwright-cli.md). Use `yunlogin-client.mjs status` for the current Workbench CDP URL, attach with `playwright-cli -s=yunlogin-workbench attach --cdp=<url>`, and detach when finished.
-- For an already-running Windows `fb.exe` with no remote-debugging transport, use `scripts/yunlogin-fb-cdp.mjs` to inspect the process, plan a relaunch, and verify CDP. The process cannot be modified in place; `--confirm-restart` is required, the port is loopback-only, and raw command lines are redacted by default.
+- Explicitly ask before installing Playwright CLI or its optional agent skill. Use [references/workflows/playwright-pairing.md](./references/workflows/playwright-pairing.md) for installation and Windows/macOS/environment-browser handoffs; use [references/workflows/playwright-cli.md](./references/workflows/playwright-cli.md) for attach commands.
+- Use `scripts/yunlogin-fb-cdp.mjs` for an already-running browser process where the platform launch path supports a confirmed CDP relaunch. Read [references/workflows/cdp-automation.md](./references/workflows/cdp-automation.md) for platform limits.
 - `append_cmd` belongs to the local launch call only. Do not override environment-managed profile, proxy, fingerprint, or debugging-port settings.
 
 ## Authorization And Sensitive Data

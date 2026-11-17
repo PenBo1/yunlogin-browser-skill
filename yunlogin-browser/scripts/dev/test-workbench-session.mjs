@@ -54,16 +54,47 @@ assert.equal((await verifyWorkbenchCdp(workbench, { owner: async () => [41], fet
 assert.equal(await verifyWorkbenchCdp(workbench, { owner: async () => [41], fetchVersion: async () => ({ webSocketDebuggerUrl: "ws://127.0.0.1:43822/devtools/browser/id" }), checkBrowser: async () => ({ product: "Chrome/107" }) }), null);
 
 let restarts = 0;
-const plan = await ensureWorkbenchCdp({ find: async () => withoutCdp, verify: async () => null, choosePort: async () => 44991, owner: async () => [], restart: async () => { restarts++; }, dryRun: true });
+const windows = { platform: "win32", webSocketAvailable: true };
+const windowsDeps = { ...windows, find: async () => withoutCdp, verify: async () => null, choosePort: async () => 44991, owner: async () => [], restart: async () => { restarts++; } };
+const plan = await ensureWorkbenchCdp({ ...windowsDeps, dryRun: true });
 assert.equal(plan.needsRestart, true);
 assert.equal(restarts, 0);
-await assert.rejects(ensureWorkbenchCdp({ find: async () => withoutCdp, verify: async () => null, port: 44991, owner: async () => [999], restart: async () => { restarts++; } }), /in use/);
-await assert.rejects(ensureWorkbenchCdp({ find: async () => workbench, verify: async () => null, owner: async () => [], restart: async () => { restarts++; } }), /failed process/);
+await assert.rejects(ensureWorkbenchCdp({ ...windowsDeps, owner: async () => [999] }), /in use/);
+await assert.rejects(ensureWorkbenchCdp({ ...windowsDeps, find: async () => workbench }), /failed process/);
 const verified = { pid: 42, browserId: "Workbench", remoteDebuggingPort: "44991", creationDate: "2026-10-19T00:01:00Z" };
-const ready = await ensureWorkbenchCdp({ find: async () => restarts ? verified : withoutCdp, verify: async item => item.pid === 42 ? { pid: 42, port: 44991 } : null,
-  choosePort: async () => 44991, owner: async () => [], restart: async () => { restarts++; return { pid: 42, cdpUrl: "ws://127.0.0.1:44991/devtools/browser/id" }; }, startedThisRun: true });
+const ready = await ensureWorkbenchCdp({ ...windowsDeps, find: async () => restarts ? verified : withoutCdp, verify: async item => item.pid === 42 ? { pid: 42, port: 44991 } : null,
+  restart: async () => { restarts++; return { pid: 42, cdpUrl: "ws://127.0.0.1:44991/devtools/browser/id" }; }, startedThisRun: true });
 assert.equal(ready.ready, true);
 assert.equal(restarts, 1);
+
+// Both OS behaviors run on every host. A macOS warning must never spawn,
+// choose another port, read credentials, or prevent reusing verified CDP.
+const { workbenchIssue, workbenchRestartNotice } = await import("../lib/workbench-guidance.mjs");
+const macosDeps = { platform: "darwin", webSocketAvailable: true, find: async () => withoutCdp, verify: async () => null,
+  restart: async () => { throw new Error("must not restart"); }, choosePort: async () => { throw new Error("must not choose port"); } };
+for (const options of [{ dryRun: true }, { confirmRestart: true }, { startedThisRun: true }]) {
+  const notice = await ensureWorkbenchCdp({ ...macosDeps, ...options });
+  assert.equal(notice.reasonCode, "macos-workbench-cdp-unavailable");
+  assert.equal(notice.automaticRetry, false);
+  assert.equal(notice.automaticSetupUnavailable, true);
+  assert.equal(notice.alternative.mode, "web-workbench");
+  assert.equal(notice.alternative.automaticLaunch, false);
+  assert.equal(notice.alternative.automaticCredentialTransfer, false);
+  assert(!Object.hasOwn(notice, "unsupported"));
+  assert(notice.action.length > 0);
+  assert.deepEqual(notice.blockedCapabilities, ["workbench-page-control", "workbench-session-sync"]);
+}
+assert.equal((await ensureWorkbenchCdp({ ...macosDeps, find: async () => null })).state, "workbench-not-running");
+assert.equal((await ensureWorkbenchCdp({ ...macosDeps, find: async () => workbench, verify: async () => ({ pid: 41, port: 43821 }) })).ready, true);
+assert.equal((await ensureWorkbenchCdp({ ...macosDeps, find: async () => workbench, webSocketAvailable: false })).state, "runtime-unavailable");
+assert.equal(workbenchRestartNotice({ browserId: "Shop-fixture" }, "darwin"), null);
+assert.equal(workbenchRestartNotice(withoutCdp, "win32"), null);
+const blockedStatus = await workbenchStatus({ cdp: async () => workbenchIssue("macos-workbench-cdp-unavailable"), cache: async () => undefined,
+  capture: async () => { throw new Error("must not read credentials"); } });
+assert.equal(blockedStatus.loginState, "unverified");
+assert.equal(blockedStatus.reasonCode, "macos-workbench-cdp-unavailable");
+assert.equal(blockedStatus.alternative.mode, "web-workbench");
+assert.equal((await workbenchStatus({ cdp: async () => { throw new Error("private-error"); }, cache: async () => undefined })).state, "unknown");
 
 const previous = process.env.LOCALAPPDATA;
 const temporary = await mkdtemp(path.join(os.tmpdir(), "yunlogin-session-test-"));

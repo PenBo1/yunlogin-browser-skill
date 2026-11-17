@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import http from "node:http";
 import { randomBytes, createHash } from "node:crypto";
+import { macDesktopListeners } from "./lib/macos-client.mjs";
 
 const execFileAsync = promisify(execFile);
 const INVENTORY = String.raw`
@@ -31,7 +32,8 @@ if ($ids.Count -gt 0) {
 `;
 
 export async function desktopListeners() {
-  if (process.platform !== "win32") throw new Error("Automatic listener discovery currently supports Windows only.");
+  if (process.platform === "darwin") return macDesktopListeners();
+  if (process.platform !== "win32") throw new Error("Automatic listener discovery supports Windows and macOS only.");
   const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(INVENTORY, "utf16le").toString("base64")], { windowsHide: true, timeout: 15000, maxBuffer: 1024 * 1024 });
   return JSON.parse(stdout.replace(/^\uFEFF/, ""));
 }

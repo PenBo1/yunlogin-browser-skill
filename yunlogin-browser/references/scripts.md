@@ -13,7 +13,7 @@ scripts/
   yunlogin-auth.mjs         token login, setup, status, and refresh
   yunlogin-env.mjs          environment, group, and tag lifecycle
   yunlogin-cdp.mjs          launch, CDP attach, and token capture
-  yunlogin-fb-cdp.mjs       inspect or relaunch a Windows fb.exe with CDP
+  yunlogin-fb-cdp.mjs       inspect or relaunch Windows fb.exe or macOS FbBrowser with CDP
   yunlogin-doctor.mjs       read-only self-test for the whole skill
   lib/                      shared modules imported by the commands and the dev tooling (including route-safety.mjs)
   dev/                      maintenance tooling, not run by hand during normal work
@@ -27,13 +27,15 @@ Commands you run:
 
 | Script | Surface | Purpose | Network Access | Writes Files |
 | --- | --- | --- | --- | --- |
-| `yunlogin-ports.mjs` | Windows/local | Fresh process-owned TCP inventory; classify verified API ports | Read-only loopback probes on current YunLogin listeners | No |
-| `yunlogin-client.mjs` | Windows/local | Locate/start client, enable Workbench CDP, synchronize current credentials | Read-only checks; authorized start or Workbench restart | User-level Workbench session cache after verified sync |
+| `yunlogin-ports.mjs` | Windows/macOS local | Fresh process-owned TCP inventory; classify verified API ports | Read-only loopback probes on current YunLogin listeners | No |
+| `yunlogin-workbench-web-login.mjs` | Web login bootstrap | Capture selected environment extension Authorization, validate management user/company, cache privately and inject a selected web profile; `--from-cache` revalidates reuse | Explicit live local control/CDP and management identity reads; dry-run sends nothing | User-level web-workbench-session.json (0600), target localStorage; no native cache changes |
+| `yunlogin-workbench-web.mjs` | Web Workbench preparation | Generate Playwright CLI config with loopback CDP and origin-scoped verified bridge ports; no login transfer or browser launch | Fresh owned loopback probes, also on dry-run | Config/init script in the selected new run directory; dry-run writes nothing |
+| `yunlogin-client.mjs` | Windows/macOS local | Locate/start client, enable Workbench CDP, synchronize current credentials | Read-only checks; authorized start or Workbench restart | User-level Workbench session cache after verified sync |
 | `yunlogin-api.mjs` | Local | Safely call the loopback API or validate a request with dry-run | Connects to the local service only when making a live request | Reads the file specified by `--body-file` only |
 | `yunlogin-server-api.mjs` | Server | Safely call one cataloged management-center endpoint | Connects to the HTTPS server only when making a live request | Reads the file specified by `--body-file` only |
 | `yunlogin-env.mjs` | Local/Server | Operate environments using the synchronized Workbench session | Connects to Workbench CDP, server and loopback on live commands | User-level Workbench session cache |
 | `yunlogin-cdp.mjs` | Local/CDP | Launch a local environment or connect to a CDP endpoint | Connects to localhost or an explicit CDP URL only when using connection commands | Optional session output with `--output` |
-| `yunlogin-fb-cdp.mjs` | Windows/CDP | Inspect a running `fb.exe` process, plan a relaunch with a loopback CDP port, and verify the endpoint | Reads Win32 process data; connects only to a loopback CDP endpoint | Optional verified session output with `--output` |
+| `yunlogin-fb-cdp.mjs` | Windows/macOS CDP | Inspect a running `fb.exe` or `FbBrowser` process, plan a relaunch with a loopback CDP port, and verify the endpoint | Reads Win32 or macOS process data; connects only to a loopback CDP endpoint | Optional verified session output with `--output` |
 | `yunlogin-auth.mjs` | Workbench | Compare or synchronize the current management-center page session | CDP and verification reads on live sync | Atomic user-level Workbench session cache |
 | `lib/local-token-store.mjs` | Local/Server | Read the current validated Workbench snapshot | No | No |
 | `yunlogin-doctor.mjs` | All | Self-test the skill: structure, catalogs, hygiene, and helper behaviour. `--audit` runs the full research audit chain | With `--live` or `--audit`; `--audit --skip-heavy` stays read-only | No |

@@ -2,6 +2,8 @@ import { execFile } from "node:child_process";
 import { createServer } from "node:net";
 import { promisify } from "node:util";
 import { browserVersion, fetchCdpVersion, listFbProcesses, restartFbProcess } from "../yunlogin-fb-cdp.mjs";
+import { macListeners } from "./macos-client.mjs";
+import { workbenchIssue, workbenchRestartNotice } from "./workbench-guidance.mjs";
 
 const execFileAsync = promisify(execFile);
 const WORKBENCH_ID = "Workbench";
@@ -13,6 +15,7 @@ export async function findWorkbench() {
 }
 
 async function listenerOwner(port) {
+  if (process.platform === "darwin") return (await macListeners({ port })).filter(p => p.address === "127.0.0.1").map(p => p.pid);
   const script = `[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
 @(Get-NetTCPConnection -State Listen -LocalAddress 127.0.0.1 -LocalPort ${port} -ErrorAction SilentlyContinue | ForEach-Object {[int]$_.OwningProcess}) | ConvertTo-Json -Compress`;
   const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { windowsHide: true, timeout: 10000 });
@@ -53,11 +56,14 @@ export async function verifyWorkbenchCdp(workbench, { owner = listenerOwner, fet
   return { pid: workbench.pid, browserId: WORKBENCH_ID, processStartedAt: workbench.creationDate, port, cdpUrl: url, browserVersion: result.product };
 }
 
-export async function ensureWorkbenchCdp({ port, confirmRestart = false, startedThisRun = false, dryRun = false, find = findWorkbench, verify = verifyWorkbenchCdp, restart = restartFbProcess, choosePort = reserveCandidatePort, owner = listenerOwner } = {}) {
+export async function ensureWorkbenchCdp({ port, confirmRestart = false, startedThisRun = false, dryRun = false, find = findWorkbench, verify = verifyWorkbenchCdp, restart = restartFbProcess, choosePort = reserveCandidatePort, owner = listenerOwner, platform = process.platform, webSocketAvailable = typeof WebSocket === "function" } = {}) {
   const workbench = await find();
-  if (!workbench) return { ready: false, reason: "Workbench browser is not running; open or start YunLogin first." };
+  if (!workbench) return workbenchIssue("workbench-not-running");
+  if (workbench.remoteDebuggingPort && !webSocketAvailable) return workbenchIssue("cdp-runtime-unavailable", { pid: workbench.pid });
   const connected = await verify(workbench);
   if (connected) return { ready: true, reused: true, ...connected };
+  const notice = workbenchRestartNotice(workbench, platform);
+  if (notice) return { ...notice, browserId: WORKBENCH_ID };
   if (workbench.remoteDebuggingPort) throw new Error("Workbench already declares a CDP port but it failed process/endpoint verification. Inspect it before any restart.");
   const selectedPort = port === undefined ? await choosePort() : validateCdpPort(port);
   if ((await owner(selectedPort)).length) throw new Error(`CDP port ${selectedPort} is in use; choose another loopback port.`);

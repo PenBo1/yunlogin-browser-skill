@@ -12,7 +12,7 @@
   <strong>English</strong> | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-<p align="center">Version 1.1.0 · MIT</p>
+<p align="center">Version 1.1.7 · MIT</p>
 
 ## Overview
 
@@ -32,8 +32,8 @@ Do not silently switch surfaces. Read the relevant endpoint document before maki
 
 - **77 documented endpoints**: 23 local API routes and 54 management-center routes.
 - **Environment lifecycle**: create, clone, update, group, tag, and delete environments with confirmation gates on mutations.
-- **Workbench session**: re-read the management-center page's current token, user, and company before authenticated API calls; keep the validated snapshot outside the repository.
-- **CDP automation**: launch a managed environment, connect over Chrome DevTools Protocol, and optionally pair the browser with the Playwright CLI.
+- **Workbench sessions**: Windows can use verified native Workbench CDP. On macOS, when native CDP is unavailable, a separate web Workbench provides page control with verified bridge ports and an explicitly selected environment's validated Authorization.
+- **CDP automation**: launch a managed environment and connect over Chrome DevTools Protocol. Playwright CLI handles page actions; its agent skill is optional.
 - **Existing `fb.exe` support**: inspect a running Windows `fb.exe`, plan a relaunch with a loopback CDP port, and verify the endpoint before using it.
 - **Safe by default**: dry runs, loopback-only local access, sensitive-field redaction, and explicit confirmation for destructive actions.
 
@@ -55,7 +55,7 @@ yunlogin-browser/
 
 - Node.js 22 or newer is recommended because the scripts use the built-in global `fetch` and `WebSocket` clients.
 - A running YunLogin desktop client for local API access.
-- A logged-in YunLogin Workbench with verified loopback CDP for authenticated management-center API access.
+- A logged-in native YunLogin Workbench with verified loopback CDP for the authenticated management-center API helpers. The separate macOS web Workbench session supports page automation and does not automatically authenticate those helpers.
 - Windows is required for `fb.exe` process inspection and relaunch commands.
 
 No third-party npm packages are required.
@@ -72,26 +72,26 @@ Or copy the `yunlogin-browser` folder into your Codex skills directory.
 
 ## Quick Start
 
-Use Node.js JavaScript helpers to discover current client ports and guide startup. Port values are refreshed from YunLogin-owned listeners, not copied from examples. If no installation is located, the skill asks about a custom path and offers [YunLogin](https://www.yunlogin.com/?c=7fzh). See [startup guidance](yunlogin-browser/references/client-api/STARTUP.md) and [port evidence](yunlogin-browser/references/client-api/PORTS.md).
+Run the following commands from the `yunlogin-browser` skill directory, whether using this checkout or an installed copy. The Node.js helpers discover installations, guide startup, and refresh ports from YunLogin-owned listeners on Windows and macOS. If no installation is located, the skill asks about a custom path and offers [YunLogin](https://www.yunlogin.com/?c=7fzh). See [startup guidance](yunlogin-browser/references/client-api/STARTUP.md) and [port evidence](yunlogin-browser/references/client-api/PORTS.md).
 
 ```powershell
 # Discover current ports and desktop readiness
 node scripts/yunlogin-ports.mjs
 node scripts/yunlogin-client.mjs status
-# Only after startup approval; select the discovered installation
+# Windows example: after startup approval, select the discovered installation
 node scripts/yunlogin-client.mjs start --exe 'C:\path\YunLogin.exe' --confirm-start
 # Read an allowlisted client configuration summary
 node scripts/yunlogin-client.mjs config --dry-run
 node scripts/yunlogin-client.mjs config
 
-# Check the Workbench management session (browser CDP attach does not require it)
+# Check the native Workbench management session
 node scripts/yunlogin-auth.mjs status
 node scripts/yunlogin-auth.mjs sync-workbench --dry-run
 
-# Launch a managed environment and save its CDP session
-node scripts/yunlogin-cdp.mjs start --account-id <account-id> --output session.json
+# Launch a managed environment
+node scripts/yunlogin-cdp.mjs start --account-id <account-id>
 
-# Inspect a running Windows fb.exe process
+# Windows: inspect a running fb.exe process
 node scripts/yunlogin-fb-cdp.mjs list --main-only
 node scripts/yunlogin-fb-cdp.mjs inspect --browser-id Workbench
 
@@ -101,19 +101,15 @@ node scripts/yunlogin-client.mjs start --dry-run
 # Apply the relaunch after confirming that Workbench may close and reopen
 node scripts/yunlogin-client.mjs start --confirm-restart
 
-# Attach Playwright CLI to the verified current Workbench CDP URL
-$state = node scripts/yunlogin-client.mjs status | ConvertFrom-Json
-$cdp = $state.workbench.cdpUrl
-playwright-cli -s=yunlogin-workbench attach --cdp=$cdp
-playwright-cli -s=yunlogin-workbench tab-list
-playwright-cli -s=yunlogin-workbench detach
-
-# Read one management-center route
+# After native Workbench CDP and identity are verified, synchronize and read a route
+node scripts/yunlogin-auth.mjs sync-workbench
 node scripts/yunlogin-server-api.mjs browser-settings
 
 # Validate the documentation set
 node scripts/dev/validate-api-docs.mjs
 ```
+
+The `fb.exe` relaunch above is a Windows workflow. On macOS, reuse native CDP only when it verifies; otherwise follow the [web Workbench workflow](yunlogin-browser/references/workflows/web-workbench.md) to open a separate Playwright CLI browser. Run Playwright in a user-level directory outside the skill. The optional Playwright agent skill and CLI installation are covered in the [pairing guide](yunlogin-browser/references/workflows/playwright-pairing.md).
 
 ## Existing `fb.exe` CDP Relaunch
 
@@ -132,7 +128,7 @@ The CDP endpoint is limited to loopback. Do not expose the debugging port to ano
 
 ## Credentials
 
-Tokens are never stored in this repository. The skill caches them in the user profile:
+Credentials are not stored in this repository. A verified native Workbench session is cached in the user profile. The macOS web workflow can separately validate Authorization from a selected environment and store a private web-session cache; it does not replace the native API-helper session.
 
 | Platform | Location |
 | --- | --- |
@@ -146,7 +142,10 @@ Never print, commit, or paste tokens into issues, logs, or generated documentati
 - Skill instructions: [yunlogin-browser/SKILL.md](yunlogin-browser/SKILL.md)
 - API navigation: [yunlogin-browser/references/INDEX.md](yunlogin-browser/references/INDEX.md)
 - CDP automation: [yunlogin-browser/references/workflows/cdp-automation.md](yunlogin-browser/references/workflows/cdp-automation.md)
-- Playwright pairing: [yunlogin-browser/references/workflows/playwright-cli.md](yunlogin-browser/references/workflows/playwright-cli.md)
+- macOS web Workbench: [yunlogin-browser/references/workflows/web-workbench.md](yunlogin-browser/references/workflows/web-workbench.md)
+- Playwright pairing: [yunlogin-browser/references/workflows/playwright-pairing.md](yunlogin-browser/references/workflows/playwright-pairing.md)
+- Playwright CLI: [yunlogin-browser/references/workflows/playwright-cli.md](yunlogin-browser/references/workflows/playwright-cli.md)
+- Session lifecycle: [yunlogin-browser/references/workflows/token-lifecycle.md](yunlogin-browser/references/workflows/token-lifecycle.md)
 - Script reference: [yunlogin-browser/references/scripts.md](yunlogin-browser/references/scripts.md)
 - Field inventory: [yunlogin-browser/references/server-api/FIELD_INVENTORY.md](yunlogin-browser/references/server-api/FIELD_INVENTORY.md)
 - Test coverage: [yunlogin-browser/references/testing.md](yunlogin-browser/references/testing.md)

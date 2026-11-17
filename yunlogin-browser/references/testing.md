@@ -1,5 +1,43 @@
 # Test Coverage
 
+## Environment Token To Web Workbench (2026-11-17)
+
+- Live test launched one existing named Codex test environment, connected to its returned Chrome 141 CDP, and read its observed environment extension's localStorage.Authorization. The value was wrapped in `{value}`. No native Workbench restart or environment-record mutation occurred.
+- The exact captured authorization passed HTTP 200/business code 200 on both management identity routes. User/company profiles were derived from those read responses, credential/password fields removed, and destination storage normalized to the current page contract (wrapped Authorization, plain userinfo/CompanyInfo).
+- The helper cached a distinct user-level web session atomically with mode 0600 and injected all three keys into the selected dedicated web profile. Page reload entered the logged-in environment manager. Browser-side identity responses matched both IDs; the GPU bridge returned HTTP 200/code 0. Playwright dismissed an announcement, entered the test name and searched to one result. No token value was printed; a private scan of generated CLI text found no exact transferred token to redact.
+- Independent code review identified target re-selection and a late source-change/cache-commit race. The final code pins the selected target ID, rechecks source/target before atomic cache rename, preserves the previous cache on a failed check, and reports cache updates separately from injection failures. Regression cases reproduce both issues and pass.
+- Offline tests cover expiry/missing/rejected tokens, early/late source changes, user/company mismatch, correct destination data types, dry-run/confirmation without storage access, private atomic cache writes and reuse, and safe result summaries. Cache reuse validation is tested independently of the native Workbench credential owner. Live evidence applies to the selected environment/extension/version; it does not establish universal extension compatibility.
+
+
+## Playwright CLI Installation Guidance (2026-11-16)
+
+- Read-only checks confirmed local Node/npm, CLI 0.1.24, `open`, `attach`, `run-code`, `install` and `install-browser` help. Installed package metadata declares Node.js >=18; this skill separately recommends Node.js 22+ for its CDP helpers.
+- Installation guidance now covers macOS/zsh and Windows/PowerShell, missing prerequisites, explicit install versus manual/decline choices, current-shell PATH repair, permission/network failures, optional agent skill, and the separate Chrome prerequisite for the web Workbench config. No package, browser or agent skill was installed to verify this documentation update. Windows commands were reviewed but not executed on this Mac.
+
+## Web Workbench Fallback (2026-11-16)
+
+- CLI 0.1.24 accepted a generated Chromium config with a dedicated temporary profile, `--remote-debugging-address=127.0.0.1` and a free debugging port. `/json/version` and `Browser.getVersion` passed; `lsof` identified a Chromium-owned IPv4 loopback listener. The dedicated test browser was closed afterward; native Workbench was not restarted.
+- An intercepted management-origin HTML fixture observed `appPort` and `port` before its inline script, and no Authorization value was present. No real management login, account data or native bridge authentication was used in this check.
+- The deployed public management bundle was inspected for the storage keys and its `http://127.0.0.1` / application WebSocket construction. `wsPort` was not a localStorage key in that inspected main bundle. Optional bridge keys remain unmapped until independently verified.
+- Independent read-only forward testing confirmed the fallback offer, current bridge port discovery, CLI/config availability and distinct native/web session ownership. It identified that `run-code --filename` alone is not a private cross-process credential channel; the workflow initially required sign-in without a separate private adapter. The explicit environment bootstrap adapter added on 2026-11-17 now implements that missing read/validate/cache/inject chain.
+- Offline regression checks cover current PID-owned port selection, IPv4 verification for wildcard/IPv6 listeners, missing/ambiguous services, origin-scoped injection, preserved login storage, CDP config, output overwrite refusal and no-write dry-run. The skill doctor includes this check. End-to-end authenticated management/extension functionality is not established by these fixtures.
+
+## Workbench Failure Reminders (2026-11-16)
+
+- Status and dry-run report separate client-stopped, Workbench-missing, inspection-unknown, missing-WebSocket and unverified-CDP states with recovery actions. Existing verified CDP remains reusable on macOS; a failed automatic setup is not treated as permanent platform incompatibility.
+- Isolated regression cases cover macOS restart suppression, Windows restart/port-conflict behavior, start failure, readiness timeout, safe error messages, API readiness independent of Workbench, and no credential reads or writes when CDP is absent. They do not restart the user's Workbench.
+- Native macOS temporary fixtures verify that direct Workbench restart commands return `restartSkipped` without terminating the selected fixture, while the non-Workbench fixture's CDP relaunch still passes. Launch values remain redacted. These fixtures do not prove that a real Workbench can be launched with CDP.
+- Guidance explains prompt user-language reminders, manual recovery through YunLogin, no repeated restart/port rotation without new evidence, and no silent switch to another browser. Live checks for this update are read-only status checks; no client or Workbench restart is required.
+
+## macOS Support (2026-11-13)
+
+- Live discovery on macOS 14.8.7 arm64 identified YunLogin 4.0.3.5, both API surfaces and the Workbench process. Both HTTP probes passed. The observed Workbench had no CDP transport; automatic relaunch remains unverified rather than evidence of a permanent platform limitation.
+- `node scripts/dev/test-macos-client.mjs` checks bundle identity, renamed/custom `.app` paths, exact argv parsing including spaces, quotes, empty arguments and Unicode, PID-owned listeners, stopped versus query-denied states, startup/restart confirmation, duplicate-launch prevention, spawn failure and post-spawn discovery failure. The doctor includes these checks and passes 31/31 on this Mac; a live Windows regression was not run.
+- `node --experimental-websocket scripts/dev/test-macos-client.mjs --native` on Node.js 20.13.1 exercised the real macOS `ps`, `plutil`, `lsof`, `osascript`, `sysctl` and `proc_pidinfo` path against isolated temporary application fixtures. It verified executable launch from a path with spaces, process discovery, owned HTTP listeners, fresh API classification, and exact kernel argv retrieval. It also verified the selected browser's confirmation gate, SIGTERM/relaunch, argument preservation and redaction, microsecond start-time identity, loopback CDP handshake, `Browser.getVersion`, and rejection of another PID's listener. The fixture uses a mock CDP server; it does not establish a logged-in YunLogin session.
+- A separate isolated probe of the bundled real FbBrowser exited with code 156 and logged `!IsYunLoginMainRunning` without the YunLogin host context. A confirmed restart of the live Workbench produced a new PID, but YunLogin restored the canonical command line without CDP flags; no CDP endpoint appeared. The skill now reports this automatic relaunch method as unavailable instead of retrying direct child relaunches; the exact internal cause is not established. Normal environment browsers remain supported through their launch response CDP URL.
+- Node.js 22+ supplies global WebSocket. Node.js 20 needs `--experimental-websocket` for CDP commands; approved restarts refuse to stop a browser when this runtime capability is missing.
+- Skill frontmatter validation and all 614 relative Markdown links pass. No production environment, account, proxy, Cookie or client configuration was modified by the macOS checks.
+
 ## Workbench CDP And Session Sync (2026-10-19)
 
 - With user approval, the existing Workbench was reopened once: PID 28816 became PID 22340, and the verified loopback CDP port was 55876. `Browser.getVersion` returned Chrome/107.0.5304.114. YunLogin main process was not restarted.

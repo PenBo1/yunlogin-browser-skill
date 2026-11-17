@@ -55,10 +55,12 @@ node scripts/yunlogin-cdp.mjs targets --cdp-url http://127.0.0.1:9222
 - `http://` and `https://` URLs are resolved through `/json/version`.
 - External CDP endpoints are not restricted by the YunLogin local launch helper, but they must be supplied explicitly.
 
-## Existing `fb.exe` Relaunch
+## Existing `fb.exe` Or macOS `FbBrowser` Relaunch
+
+For macOS Workbench, first read [startup failure reporting](../client-api/STARTUP.md#macos-workbench-failure-reporting). The tested automatic direct relaunch method has not succeeded; the helper returns `automaticSetupUnavailable` and `restartSkipped` instead of closing Workbench again. Existing verified Workbench CDP is reusable. When absent on macOS, offer the explicit [web Workbench fallback](web-workbench.md) for page control with a dedicated Playwright CLI browser, CDP and verified localStorage bridge data. This limit concerns the tested method, not proof that every macOS build lacks CDP. The relaunch examples below apply to Windows or an independently verified launch path.
 
 A running Chromium process cannot receive a new command-line argument. If an
-already-running `fb.exe` has no `--remote-debugging-port` and no other CDP
+already-running Windows `fb.exe` or macOS `FbBrowser` has no `--remote-debugging-port` and no other CDP
 transport, `yunlogin-fb-cdp.mjs` can inspect it and, after confirmation,
 restart it with a loopback debugging port.
 

@@ -12,7 +12,7 @@
   <a href="README.md">English</a> | <strong>简体中文</strong>
 </p>
 
-<p align="center">版本 1.1.0 · MIT</p>
+<p align="center">版本 1.1.7 · MIT</p>
 
 ## 项目简介
 
@@ -32,8 +32,8 @@ Skill 明确区分三个 API 面，不能静默混用：
 
 - **77 个已文档化接口**：23 个本地 API 路由，54 个管理中心路由。
 - **环境生命周期**：创建、克隆、更新、分组、打标签和删除环境；所有修改操作都有确认门槛。
-- **工作台会话**：每次认证请求前重新读取管理中心页面的当前 Token、用户及公司信息，在仓库外保存验证后的会话快照。
-- **CDP 自动化**：启动托管环境并通过 Chrome DevTools Protocol 连接，也可以选择接入 Playwright CLI。
+- **工作台会话**：Windows 可使用验证通过的原生工作台 CDP；macOS 原生 CDP 不可用时，可使用独立网页工作台控制页面，并验证桥接端口及明确选择的环境 Authorization。
+- **CDP 自动化**：启动托管环境并通过 Chrome DevTools Protocol 连接；Playwright CLI 负责页面操作，其 agent skill 可选安装。
 - **已运行 `fb.exe` 支持**：查看 Windows `fb.exe` 当前命令行，规划带 loopback CDP 端口的重启，并在使用前验证 CDP 是否可用。
 - **默认安全**：支持 dry-run、仅 loopback 本地访问、敏感字段脱敏，以及高危操作的显式确认。
 
@@ -55,7 +55,7 @@ yunlogin-browser/
 
 - 推荐使用 Node.js 22 或更高版本，因为脚本依赖内置的全局 `fetch` 和 `WebSocket`。
 - 本地 API 需要正在运行的云登客户端。
-- 需要已登录且启用回环 CDP 的云登工作台，才能调用需认证的管理中心 API。
+- 需要已登录且回环 CDP 验证通过的原生云登工作台，才能使用需认证的管理中心 API 辅助脚本。macOS 独立网页工作台用于页面自动化，不会自动为这些脚本提供认证。
 - `fb.exe` 进程查看和重启命令仅支持 Windows。
 
 脚本不需要安装任何第三方 npm 包。
@@ -72,26 +72,26 @@ scripts/install-skill-from-github.py --repo PenBo1/yunlogin-browser-skill --path
 
 ## 快速开始
 
-新增 Node.js JavaScript 脚本获取客户端当前端口，每次根据 YunLogin 进程实际监听情况重新发现，不复用示例端口。客户端未运行时先询问是否启动；没有找到安装位置时先询问自定义路径，再提供 [YunLogin 下载入口](https://www.yunlogin.com/?c=7fzh)。详见[启动引导](yunlogin-browser/references/client-api/STARTUP.md)和[端口分析记录](yunlogin-browser/references/client-api/PORTS.md)。
+以下命令均从 `yunlogin-browser` skill 目录执行，仓库副本和已安装副本均适用。Node.js 脚本支持 Windows 和 macOS 的安装发现、启动引导及根据 YunLogin 进程实际监听情况重新发现端口。客户端未运行时先询问是否启动；没有找到安装位置时先询问自定义路径，再提供 [YunLogin 下载入口](https://www.yunlogin.com/?c=7fzh)。详见[启动引导](yunlogin-browser/references/client-api/STARTUP.md)和[端口分析记录](yunlogin-browser/references/client-api/PORTS.md)。
 
 ```powershell
 # 获取当前端口与客户端就绪状态
 node scripts/yunlogin-ports.mjs
 node scripts/yunlogin-client.mjs status
-# 用户同意启动后，使用发现的安装路径
+# Windows 示例：用户同意启动后，使用发现的安装路径
 node scripts/yunlogin-client.mjs start --exe 'C:\path\YunLogin.exe' --confirm-start
 # 获取只包含允许公开字段的客户端配置摘要
 node scripts/yunlogin-client.mjs config --dry-run
 node scripts/yunlogin-client.mjs config
 
-# 检查工作台管理中心会话（浏览器 CDP 连接不依赖它）
+# 检查原生工作台管理中心会话
 node scripts/yunlogin-auth.mjs status
 node scripts/yunlogin-auth.mjs sync-workbench --dry-run
 
-# 启动托管环境并保存 CDP 会话
-node scripts/yunlogin-cdp.mjs start --account-id <account-id> --output session.json
+# 启动托管环境
+node scripts/yunlogin-cdp.mjs start --account-id <account-id>
 
-# 查看当前 Windows fb.exe 进程
+# Windows：查看当前 fb.exe 进程
 node scripts/yunlogin-fb-cdp.mjs list --main-only
 node scripts/yunlogin-fb-cdp.mjs inspect --browser-id Workbench
 
@@ -101,19 +101,15 @@ node scripts/yunlogin-client.mjs start --dry-run
 # 确认允许工作台关闭并重开后执行
 node scripts/yunlogin-client.mjs start --confirm-restart
 
-# 用当前已验证的工作台 CDP 地址连接 Playwright CLI
-$state = node scripts/yunlogin-client.mjs status | ConvertFrom-Json
-$cdp = $state.workbench.cdpUrl
-playwright-cli -s=yunlogin-workbench attach --cdp=$cdp
-playwright-cli -s=yunlogin-workbench tab-list
-playwright-cli -s=yunlogin-workbench detach
-
-# 读取一个管理中心接口
+# 原生工作台 CDP 和身份验证通过后，同步会话并读取接口
+node scripts/yunlogin-auth.mjs sync-workbench
 node scripts/yunlogin-server-api.mjs browser-settings
 
 # 校验接口文档
 node scripts/dev/validate-api-docs.mjs
 ```
+
+上面的 `fb.exe` 重启流程适用于 Windows。macOS 仅在原生 CDP 验证通过时复用它；否则参照[网页工作台流程](yunlogin-browser/references/workflows/web-workbench.md)打开独立的 Playwright CLI 浏览器。Playwright 应在 skill 目录外的用户目录运行。CLI 与可选 Playwright agent skill 的安装及协作见[配对指南](yunlogin-browser/references/workflows/playwright-pairing.md)。
 
 ## 已运行 `fb.exe` 的 CDP 接入
 
@@ -132,7 +128,7 @@ CDP 端口只允许绑定 loopback，不要暴露给其他主机或公网。
 
 ## 凭证存储
 
-Token 不会保存在本仓库中，Skill 会把凭证缓存在用户目录：
+凭证不会保存在本仓库中。验证通过的原生工作台会话缓存在用户目录；macOS 网页流程可从明确选择的环境验证 Authorization，并单独保存私密网页会话缓存，不会替代原生 API 辅助脚本使用的会话。
 
 | 平台 | 路径 |
 | --- | --- |
@@ -146,7 +142,10 @@ Token 不会保存在本仓库中，Skill 会把凭证缓存在用户目录：
 - Skill 说明：[yunlogin-browser/SKILL.md](yunlogin-browser/SKILL.md)
 - API 导航：[yunlogin-browser/references/INDEX.md](yunlogin-browser/references/INDEX.md)
 - CDP 自动化：[yunlogin-browser/references/workflows/cdp-automation.md](yunlogin-browser/references/workflows/cdp-automation.md)
-- Playwright 配对：[yunlogin-browser/references/workflows/playwright-cli.md](yunlogin-browser/references/workflows/playwright-cli.md)
+- macOS 网页工作台：[yunlogin-browser/references/workflows/web-workbench.md](yunlogin-browser/references/workflows/web-workbench.md)
+- Playwright 配对：[yunlogin-browser/references/workflows/playwright-pairing.md](yunlogin-browser/references/workflows/playwright-pairing.md)
+- Playwright CLI：[yunlogin-browser/references/workflows/playwright-cli.md](yunlogin-browser/references/workflows/playwright-cli.md)
+- 会话生命周期：[yunlogin-browser/references/workflows/token-lifecycle.md](yunlogin-browser/references/workflows/token-lifecycle.md)
 - 脚本说明：[yunlogin-browser/references/scripts.md](yunlogin-browser/references/scripts.md)
 - 字段清单：[yunlogin-browser/references/server-api/FIELD_INVENTORY.md](yunlogin-browser/references/server-api/FIELD_INVENTORY.md)
 - 测试覆盖：[yunlogin-browser/references/testing.md](yunlogin-browser/references/testing.md)

@@ -1,4 +1,4 @@
-# Windows Client Ports: Discovery And Evidence
+# Windows And macOS Client Ports: Discovery And Evidence
 
 ## Run the JavaScript helper
 
@@ -8,7 +8,7 @@ From the skill directory, with Node.js available:
 node scripts/yunlogin-ports.mjs
 ```
 
-It is a Node.js ES module, with no npm dependencies and no separate PowerShell file to run. It internally queries Windows CIM and TCP listeners using built-in PowerShell. Every invocation takes a fresh snapshot of `YunLogin.exe` PIDs and their TCP listeners. It probes only loopback addresses (wildcard listeners are accessed through loopback), never every port on the machine. Permission/query failures produce an error rather than a false 'client stopped' result.
+It is a Node.js ES module, with no npm dependencies and no separate PowerShell file to run. On Windows it queries CIM and TCP listeners using built-in PowerShell. On macOS it validates the desktop bundle identity through `Info.plist`, reads PIDs with `ps`, and queries only those PIDs with `lsof -nP -a -p <pids> -iTCP -sTCP:LISTEN -Fptn`. Every invocation takes a fresh snapshot. Windows shared-memory publication is not used on macOS: `publishedClientPort` is null there; ownership and protocol verification are authoritative. It probes only loopback addresses (wildcard listeners are accessed through loopback), never every port on the machine. Permission/query failures produce an error rather than a false 'client stopped' result.
 
 The JSON output includes:
 
@@ -40,7 +40,11 @@ const configUrl = new URL("/api/v1/settings/get_config", ports.clientApiOrigins[
 
 The standalone local API CLI still has a historical 50213 default. If its verified port differs, set `YUNLOGIN_LOCAL_BASE_URL` to the selected `localApiOrigins` value before invoking that CLI. The client-origin resolver is integrated with fresh discovery and does not return a stale fallback when no GPU endpoint verifies.
 
-## Runtime observation: 2026-10-19
+## macOS Runtime Observation: 2026-11-13
+
+YunLogin 4.0.3.5 on macOS 14.8.7 arm64 was already running from `/Applications/Yunlogin Browser.app`. Fresh PID-owned listener discovery verified local API `/status` at port 50213, client API `/api/v1/client/gpu_info` at port 64718, and a WebSocket handshake at port 19002. Ports 50313 and 49512 remained unknown. These are observations, not defaults. The running Workbench was identified with exact argv and a profile path containing spaces; it had no debugging transport. Direct launch probes exited with `!IsYunLoginMainRunning`. After confirmed Workbench restarts, a new host-owned Workbench appeared without the requested debug flags, and the selected CDP ports did not verify. These observations do not establish the exact internal failure or prove all macOS launch paths unsupported. No working Workbench CDP setup route was verified in this investigation.
+
+## Windows Runtime Observation: 2026-10-19
 
 Selected local artifact: YunLogin.exe product/file version 4.0.3.7, SHA-256 `12d1577fb02952ece2c7918ffd4be6fe7e3f838c185951af8f6d36785a058844`. Core DLL SHA-256 `9f74b02c570d57da17e38cd89ab72aa28e0119403a82643b60d93233a6682f70`. Version strings identify this artifact, not the newest released product.
 

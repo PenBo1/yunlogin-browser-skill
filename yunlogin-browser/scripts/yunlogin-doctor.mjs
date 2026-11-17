@@ -103,6 +103,12 @@ const REQUIRED_PATHS = [
   "scripts/lib/local-token-store.mjs",
   "scripts/lib/server-token.mjs",
   "scripts/lib/client-bundle.mjs",
+  "scripts/lib/macos-client.mjs",
+  "scripts/lib/workbench-guidance.mjs",
+  "scripts/yunlogin-workbench-web.mjs",
+  "scripts/yunlogin-workbench-web-login.mjs",
+  "references/workflows/web-workbench.md",
+  "references/workflows/playwright-pairing.md",
   "scripts/lib/tag-colors.mjs",
   "scripts/dev/validate-api-docs.mjs",
 ];
@@ -373,6 +379,15 @@ async function checkBehaviour() {
 
   const discovery = runNode("scripts/dev/test-client-discovery.mjs", []);
   checks.push(["client discovery and secrecy", discovery.status === 0, discovery.status === 0 ? discovery.stdout.trim() : discovery.stderr.trim().slice(0, 200)]);
+
+  const macos = runNode("scripts/dev/test-macos-client.mjs", []);
+  checks.push(["macOS discovery and startup", macos.status === 0, macos.status === 0 ? macos.stdout.trim() : macos.stderr.trim().slice(0, 200)]);
+
+  const webWorkbench = runNode("scripts/dev/test-workbench-web.mjs", []);
+  checks.push(["web Workbench preparation", webWorkbench.status === 0, webWorkbench.status === 0 ? webWorkbench.stdout.trim() : webWorkbench.stderr.trim().slice(0, 200)]);
+
+  const webLogin = runNode("scripts/dev/test-workbench-web-login.mjs", []);
+  checks.push(["environment web login bootstrap", webLogin.status === 0, webLogin.status === 0 ? webLogin.stdout.trim() : webLogin.stderr.trim().slice(0, 200)]);
 
   const workbenchTest = runNode("scripts/dev/test-workbench-session.mjs", []);
   checks.push(["workbench session synchronization", workbenchTest.status === 0, workbenchTest.status === 0 ? workbenchTest.stdout.trim() : workbenchTest.stderr.trim().slice(0, 200)]);

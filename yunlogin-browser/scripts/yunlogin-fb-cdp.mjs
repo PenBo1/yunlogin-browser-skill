@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Inspect or relaunch a Windows fb.exe process with an explicit CDP port.
+ * Inspect or relaunch Windows fb.exe or macOS FbBrowser with a CDP port.
  *
  * Windows cannot change the command line of a live process. This helper first
  * enumerates fb.exe, selects the main browser process, and can relaunch it with
@@ -18,9 +18,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { CdpClient } from "./yunlogin-cdp.mjs";
+import { macFbProcesses } from "./lib/macos-client.mjs";
+import { workbenchRestartNotice } from "./lib/workbench-guidance.mjs";
 
 const execFileAsync = promisify(execFile);
-const PROCESS_NAME = "fb.exe";
+const PROCESS_NAME = process.platform === "darwin" ? "FbBrowser" : "fb.exe";
 const DEFAULT_CDP_ADDRESS = "127.0.0.1";
 const DEFAULT_CDP_PORT = 9222;
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -339,8 +341,16 @@ async function runPowerShell(script, timeoutMs) {
 }
 
 export async function listFbProcesses() {
+  if (process.platform === "darwin") {
+    return (await macFbProcesses()).map(item => ({ ...item,
+      main: !item.args.some(argument => argument.startsWith("--type=")),
+      browserId: flagValue(item.args, "--browser-id"),
+      remoteDebuggingPort: flagValue(item.args, "--remote-debugging-port"),
+      hasRemoteDebuggingPipe: hasFlag(item.args, "--remote-debugging-pipe"),
+    }));
+  }
   if (process.platform !== "win32") {
-    throw new Error("fb.exe process inspection is only supported on Windows");
+    throw new Error("Browser process inspection supports Windows and macOS only");
   }
   const script = `
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -534,6 +544,16 @@ export async function browserVersion(cdpUrl, timeoutMs) {
 }
 
 async function stopProcess(pid, timeoutMs) {
+  if (process.platform === "darwin") {
+    process.kill(pid, "SIGTERM");
+    const deadline = Date.now() + Math.min(Math.max(timeoutMs, 1000), 10000);
+    while (Date.now() < deadline) {
+      try { process.kill(pid, 0); }
+      catch (error) { if (error.code === "ESRCH") return "stopped"; throw error; }
+      await sleep(150);
+    }
+    throw new Error("The selected macOS browser did not exit after SIGTERM; no replacement was launched.");
+  }
   const waitMs = Math.min(Math.max(timeoutMs, 1000), 10000);
   const script = `
 $ErrorActionPreference = 'Stop'
@@ -608,9 +628,12 @@ export async function restartFbProcess(options) {
 
   const summary = planPayload(processInfo, options, port);
   summary.portAvailable = await isPortAvailable(port);
+  const notice = workbenchRestartNotice(processInfo);
+  if (notice) return { ...summary, ...notice, needsConfirmation: false, restartSkipped: true };
   if (options.dryRun) return summary;
   if (!options.confirmRestart) return summary;
   if (!summary.portAvailable) throw new Error(`CDP port ${port} is already in use; choose another --port`);
+  if (typeof WebSocket !== "function") throw new Error("CDP requires Node.js 22+ or Node.js 20 with --experimental-websocket. The browser was not restarted.");
   const current = await selectProcess({ pid: String(processInfo.pid) });
   if (hashText(current.commandLine) !== hashText(processInfo.commandLine)) {
     throw new Error("The selected fb.exe command line changed before restart; inspect it again");
@@ -756,6 +779,7 @@ const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : "";
 if (invokedPath === path.resolve(fileURLToPath(import.meta.url))) {
   main()
     .then((result) => {
+      if (result?.automaticSetupUnavailable && !result.dryRun) process.exitCode = 4;
       if (result?.needsConfirmation) process.exitCode = 2;
       if (result && process.env.YUNLOGIN_FB_CDP_QUIET !== "1") console.log(JSON.stringify(result, null, 2));
     })

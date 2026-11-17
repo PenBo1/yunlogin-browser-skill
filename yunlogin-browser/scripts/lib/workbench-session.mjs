@@ -3,6 +3,7 @@ import { discoverPorts } from "../yunlogin-ports.mjs";
 import { ensureWorkbenchCdp, findWorkbench } from "./workbench-cdp.mjs";
 import { clearPinnedWorkbenchSession, invalidateWorkbenchSession, pinWorkbenchSession, readWorkbenchSession, updateWorkbenchSession } from "./workbench-cache.mjs";
 import { jwtExpiryMs } from "./local-token-store.mjs";
+import { workbenchIssue } from "./workbench-guidance.mjs";
 
 const MANAGEMENT_ORIGIN = "https://d126447d359e70c0.yunlogin.com";
 
@@ -97,8 +98,12 @@ export async function syncWorkbench({ capture = captureWorkbenchValues, validate
 
 export async function workbenchStatus({ capture = captureWorkbenchValues, cache = readWorkbenchSession, cdp = ensureWorkbenchCdp, validate = validateCaptured } = {}) {
   const stored = await cache();
-  const connection = await cdp({ dryRun: true }).catch(() => null);
-  if (!connection?.ready) return { connected: false, loggedIn: false, needsRestart: connection?.needsRestart ?? false, cachePresent: Boolean(stored), consistent: false };
+  const connection = await cdp({ dryRun: true }).catch(() => workbenchIssue("inspection-failed"));
+  if (!connection?.ready) return { connected: false, loggedIn: false, loginState: "unverified", needsRestart: connection?.needsRestart ?? false,
+    state: connection?.state ?? "cdp-unavailable", reasonCode: connection?.reasonCode ?? "cdp-verification-failed",
+    message: connection?.message ?? connection?.reason ?? "Workbench CDP did not verify; login state is unknown.", action: connection?.action ?? null,
+    ...(connection?.alternative ? { alternative: connection.alternative } : {}),
+    automaticSetupUnavailable: connection?.automaticSetupUnavailable ?? false, cachePresent: Boolean(stored), consistent: false };
   try {
     const live = await capture();
     await validate(live);
